@@ -441,7 +441,7 @@ export default function App() {
                   <div className="absolute -right-20 -top-20 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
                   <div className="absolute -left-10 bottom-0 w-40 h-40 bg-fuchsia-400/20 rounded-full blur-2xl"></div>
                   
-                  <p className="text-sm font-bold uppercase tracking-[0.3em] mb-4 opacity-80 relative z-10">Estimated Monthly Payout</p>
+                  <p className="text-sm font-bold uppercase tracking-[0.3em] mb-4 opacity-80 relative z-10">Estimated Monthly Payout (Nett)</p>
                   <div className="flex items-baseline gap-2 relative z-10 overflow-hidden">
                     <span className="text-xl md:text-2xl font-light opacity-80">{currency}</span>
                     <h3 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tighter truncate leading-tight py-2">
@@ -460,6 +460,9 @@ export default function App() {
                       <p className="text-xl md:text-2xl font-bold font-mono truncate">{formatValue(displayCalculations.allowancesTotal)}</p>
                     </div>
                   </div>
+                  <p className="mt-8 text-[10px] italic opacity-70 relative z-10">
+                    Based on Compensation & Benefit Policy per 1 May 2026
+                  </p>
                 </motion.div>
 
                 {/* Interactive tabs */}

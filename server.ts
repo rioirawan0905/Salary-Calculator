@@ -9,8 +9,8 @@ async function startServer() {
   // Proxy for currency historical data to avoid CORS issues
   app.get("/api/history", async (req, res) => {
     try {
-      const { start, end } = req.query;
-      const url = `https://api.frankfurter.app/${start}..${end}?from=USD&to=IDR`;
+      const { start, end, from, to } = req.query;
+      const url = `https://api.frankfurter.app/${start}..${end}?from=${from || 'USD'}&to=${to || 'IDR'}`;
       const response = await fetch(url);
       const data = await response.json();
       res.json(data);

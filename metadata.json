@@ -1,0 +1,6 @@
+{
+  "name": "Salary Estimator (International)",
+  "description": "Calculate monthly salary estimates with USD/IDR support, real-time exchange rates, data visualization, exportable tables, and Global Tax (PPh 21 & Ps 24) calculator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

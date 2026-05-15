@@ -22,12 +22,15 @@ async function startServer() {
 
   // Proxy for latest exchange rate
   app.get("/api/latest", async (req, res) => {
+    console.log('Fetching latest exchange rates...');
     try {
       const response = await fetch('https://open.er-api.com/v6/latest/USD');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
+      console.log('Successfully fetched latest rates');
       res.json(data);
     } catch (error) {
-      console.error('Proxy Error:', error);
+      console.error('Proxy Error (latest):', error);
       res.status(500).json({ error: 'Failed to fetch latest data' });
     }
   });

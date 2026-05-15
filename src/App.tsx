@@ -40,9 +40,9 @@ interface HistoricalRate {
 }
 
 export default function App() {
-  const [baseSalary, setBaseSalary] = useState<number>(0);
-  const [fieldDays, setFieldDays] = useState<number>(0);
-  const [travelDays, setTravelDays] = useState<number>(0);
+  const [baseSalary, setBaseSalary] = useState<number>(8300);
+  const [fieldDays, setFieldDays] = useState<number>(28);
+  const [travelDays, setTravelDays] = useState<number>(2);
   const [currency, setCurrency] = useState<Currency>('USD');
   const [exchangeRate, setExchangeRate] = useState<number>(16000);
   const [isFetchingRate, setIsFetchingRate] = useState(false);
@@ -655,10 +655,10 @@ export default function App() {
                                   <RechartsTooltip 
                                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                                     labelStyle={{ fontWeight: 'bold', fontSize: '12px', color: '#64748b' }}
-                                    formatter={(value: number) => [
-                                      currency === 'USD' ? Math.round(value).toLocaleString() : value.toFixed(6), 
-                                      `Rate (${currency})`
-                                    ]}
+                    formatter={(value: number) => [
+                      historyPair.includes('IDR') ? Math.round(value).toLocaleString() : value.toFixed(4), 
+                      `Value (target)`
+                    ]}
                                   />
                                   <Area 
                                     type="monotone" 
@@ -810,6 +810,7 @@ export default function App() {
                       <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                         <Globe size={18} className="text-indigo-200" />
                         Foreign Income (Algeria)
+                        <InfoBox title="IRG Certification" content="Salarie Imposable & IRG Tax comes from the IRG Certificate" />
                       </h3>
                       <div className="space-y-6">
                         <CurrencyInput 
@@ -865,9 +866,9 @@ export default function App() {
       {/* Footer / Status Bar */}
       <footer className="h-12 px-6 md:px-10 bg-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-400 mt-auto">
         <div className="flex gap-6 uppercase tracking-wider overflow-hidden">
-          <span className="hidden sm:inline">Engine V2.5.0</span>
-          <span>Currency: {currency}</span>
-          <span className="hidden sm:inline">Rate Source: Open ER-API</span>
+          <span className="hidden sm:inline">Engine V2.5.2</span>
+          <span>Mode: {process.env.NODE_ENV === 'production' ? 'Production' : 'Dev'}</span>
+          <span className="hidden sm:inline text-indigo-400">Sources: Open ER-API & Frankfurter</span>
         </div>
         <div className="flex items-center gap-2">
           <Globe size={12} className="text-indigo-400" />
@@ -912,33 +913,38 @@ function FormulaItem({ label, formula }: { label: string, formula: string }) {
 
 function CurrencyInput({ value, onChange, currency, label, placeholder = "0.00", className = "" }: any) {
   const [isFocused, setIsFocused] = useState(false);
-  const [inputValue, setInputValue] = useState(value === 0 ? '' : String(value));
+  const [inputValue, setInputValue] = useState(value === 0 || !value ? '' : String(value));
 
   // Sync internal state with external value when not focused
   useEffect(() => {
     if (!isFocused) {
-      setInputValue(value === 0 ? '' : String(value));
+      setInputValue(value === 0 || !value ? '' : String(value));
     }
   }, [value, isFocused]);
 
   const displayValue = useMemo(() => {
     if (isFocused) {
-      // While focused, we show the input value as is or formatted?
-      // Let's show formatted even when focused for the "separator" requirement
       if (!inputValue) return '';
+      // Always use comma as thousands and dot as decimal for input consistency
+      // This matches the handleChange logic
       const parts = inputValue.split('.');
       parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       return parts.join('.');
     }
     if (!value || value === 0) return '';
+    // When blurred, use locale-specific formatting
     return new Intl.NumberFormat(currency === 'IDR' || currency === 'DZD' ? 'id-ID' : 'en-US', {
       maximumFractionDigits: 2,
     }).format(value);
   }, [value, isFocused, inputValue, currency]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Remove all non-numeric characters except the decimal point
-    const rawVal = e.target.value.replace(/,/g, '');
+    // Remove formatting commas
+    let rawVal = e.target.value.replace(/,/g, '');
+    
+    // For Indonesian users who might type a comma as decimal, convert it to dot if needed
+    // But since we use type="text" and the displayValue in focus uses dots for decimals,
+    // we should be careful. Let's allow only digits and one dot.
     
     if (/^[0-9]*\.?[0-9]*$/.test(rawVal) || rawVal === '') {
       setInputValue(rawVal);

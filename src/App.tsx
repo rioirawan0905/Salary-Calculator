@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calculator, 
@@ -44,7 +44,7 @@ export default function App() {
   const [fieldDays, setFieldDays] = useState<number>(28);
   const [travelDays, setTravelDays] = useState<number>(2);
   const [currency, setCurrency] = useState<Currency>('USD');
-  const [exchangeRate, setExchangeRate] = useState<number>(16000);
+  const [exchangeRate, setExchangeRate] = useState<number>(16150);
   const [isFetchingRate, setIsFetchingRate] = useState(false);
   const [activeView, setActiveView] = useState<'salary' | 'tax'>('salary');
   const [activeTab, setActiveTab] = useState<'breakdown' | 'table' | 'history'>('breakdown');
@@ -73,11 +73,21 @@ export default function App() {
 
   const fetchExchangeRate = async () => {
     setIsFetchingRate(true);
+    console.log('Fetching exchange rate from proxy...');
     try {
       const response = await fetch('/api/latest');
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
       const data = await response.json();
+      console.log('Raw rate data:', data);
+      
       if (data && data.rates && data.rates.IDR) {
-        setExchangeRate(data.rates.IDR);
+        const rate = data.rates.IDR;
+        console.log('Setting exchange rate to:', rate);
+        setExchangeRate(rate);
+      } else {
+        console.warn('Unexpected data format from exchange rate API:', data);
       }
     } catch (error) {
       console.error('Failed to fetch exchange rate:', error);
@@ -219,7 +229,7 @@ export default function App() {
       const calc = calculateForDays(baseSalary, i, travelDays);
       data.push({
         fieldDays: i,
-        totalDuty: i + travelDays,
+        travelDays: travelDays,
         base: calc.baseAmount,
         allowances: calc.total - calc.baseAmount,
         total: calc.total
@@ -231,7 +241,7 @@ export default function App() {
   const exportToExcel = () => {
     const worksheet = XLSX.utils.json_to_sheet(tableData.map(d => ({
       'Field Days': d.fieldDays,
-      'Total Duty Days': d.totalDuty,
+      'Travel Days': d.travelDays,
       [`Base Salary (${currency})`]: d.base,
       [`Total Allowances (${currency})`]: d.allowances,
       [`Total Payout (${currency})`]: d.total
@@ -242,10 +252,10 @@ export default function App() {
   };
 
   const copyToClipboard = () => {
-    const header = `Field Days\tTotal Duty\tBase Salary\tAllowances\tTotal Payout\n`;
+    const header = `Field Days\tTravel Days\tBase Salary\tAllowances\tTotal Payout\n`;
     const rows = tableData.map(d => {
       const precision = currency === 'IDR' ? 0 : 2;
-      return `${d.fieldDays}\t${d.totalDuty}\t${d.base.toFixed(precision)}\t${d.allowances.toFixed(precision)}\t${d.total.toFixed(precision)}`;
+      return `${d.fieldDays}\t${d.travelDays}\t${d.base.toFixed(precision)}\t${d.allowances.toFixed(precision)}\t${d.total.toFixed(precision)}`;
     }).join('\n');
     navigator.clipboard.writeText(header + rows);
     alert('Table data copied to clipboard!');
@@ -254,25 +264,25 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Header Navigation */}
-      <nav className="h-20 px-6 md:px-10 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
-            <span className="text-white font-black text-xl">S</span>
+      <nav className="h-16 md:h-20 px-4 md:px-10 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 z-50">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-600 rounded-lg md:rounded-xl flex items-center justify-center shrink-0">
+            <span className="text-white font-black text-lg md:text-xl">S</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight whitespace-nowrap">Salary & Tax <span className="text-indigo-600">Calculator</span></h1>
+          <h1 className="text-base sm:text-xl md:text-2xl font-bold text-slate-800 tracking-tight whitespace-nowrap">Salary & Tax <span className="text-indigo-600">Calculator</span></h1>
         </div>
         
         <div className="flex items-center gap-2 md:gap-4">
-          <div className="bg-slate-100 p-1 rounded-xl flex items-center">
+          <div className="bg-slate-100 p-1 rounded-lg md:rounded-xl flex items-center">
             <button 
               onClick={() => changeCurrency('USD')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${currency === 'USD' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`px-2 sm:px-4 py-1 sm:py-1.5 rounded-md md:rounded-lg text-[10px] sm:text-xs font-bold transition-all ${currency === 'USD' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
             >
               USD
             </button>
             <button 
               onClick={() => changeCurrency('IDR')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${currency === 'IDR' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`px-2 sm:px-4 py-1 sm:py-1.5 rounded-md md:rounded-lg text-[10px] sm:text-xs font-bold transition-all ${currency === 'IDR' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
             >
               IDR
             </button>
@@ -281,16 +291,16 @@ export default function App() {
           <button 
             onClick={fetchExchangeRate}
             disabled={isFetchingRate}
-            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all"
+            className="p-1.5 md:p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all shrink-0"
             title={`Exchange Rate: 1 USD = ${exchangeRate.toLocaleString()} IDR`}
           >
-            <RefreshCcw size={18} className={isFetchingRate ? 'animate-spin' : ''} />
+            <RefreshCcw size={16} className={isFetchingRate ? 'animate-spin' : ''} />
           </button>
 
-          <div className="hidden sm:flex items-center gap-4 border-l border-slate-100 pl-4">
+          <div className="hidden lg:flex items-center gap-4 border-l border-slate-100 pl-4">
             <div className="text-right">
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest whitespace-nowrap">Live Rate</p>
-              <p className="text-sm font-bold text-slate-700 font-mono">1 USD ≈ {Math.round(exchangeRate).toLocaleString()}</p>
+              <p className="text-sm font-bold text-indigo-600 font-mono">1 USD = {new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2 }).format(exchangeRate)} IDR</p>
             </div>
             <div className="w-10 h-10 rounded-full bg-indigo-100 border-2 border-white shadow-sm ring-1 ring-slate-100"></div>
           </div>
@@ -298,23 +308,23 @@ export default function App() {
       </nav>
 
       {/* Main Tab Switcher */}
-      <div className="bg-white border-b border-slate-100 px-6 md:px-10 flex gap-8">
+      <div className="bg-white border-b border-slate-100 px-4 md:px-10 flex gap-4 md:gap-8 overflow-x-auto no-scrollbar">
         <button 
           onClick={() => setActiveView('salary')}
-          className={`h-12 text-sm font-bold border-b-2 transition-all ${activeView === 'salary' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${activeView === 'salary' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
         >
           Salary Calculator
         </button>
         <button 
           onClick={() => setActiveView('tax')}
-          className={`h-12 text-sm font-bold border-b-2 transition-all ${activeView === 'tax' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${activeView === 'tax' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
         >
-          Global Tax Calculator (PPh 21 & Ps 24)
+          Global Tax Calculator
         </button>
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 md:p-10 max-w-7xl mx-auto w-full mb-12">
+      <main className="flex-1 p-4 md:p-10 max-w-7xl mx-auto w-full mb-12">
         <AnimatePresence mode="wait">
           {activeView === 'salary' ? (
             <motion.div 
@@ -329,14 +339,14 @@ export default function App() {
                 <motion.div 
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 h-fit"
+                  className="bg-white p-5 sm:p-8 rounded-[24px] sm:rounded-[32px] shadow-sm border border-slate-100 h-fit"
                 >
-                  <h2 className="text-xl font-bold text-slate-800 mb-8 flex items-center gap-2">
-                    <span className="w-2 h-6 bg-amber-400 rounded-full"></span>
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-6 sm:mb-8 flex items-center gap-2">
+                    <span className="w-1.5 sm:w-2 h-5 sm:h-6 bg-amber-400 rounded-full"></span>
                     Input Parameters
                   </h2>
                   
-                  <div className="space-y-6">
+                  <div className="space-y-5 sm:space-y-6">
                     <CurrencyInput 
                       label={`Base Salary International (${currency})`}
                       currency={currency}
@@ -431,36 +441,36 @@ export default function App() {
               </div>
 
               {/* Results & Interactive Section */}
-              <div className="lg:col-span-8 flex flex-col gap-8">
+                <div className="lg:col-span-8 flex flex-col gap-6 sm:gap-8">
                 {/* Main Visual Payout */}
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="bg-gradient-to-br from-indigo-500 to-fuchsia-600 rounded-[40px] p-8 md:p-10 text-white flex flex-col justify-center relative overflow-hidden shadow-2xl shadow-indigo-200"
+                  className="bg-gradient-to-br from-indigo-500 to-fuchsia-600 rounded-[32px] md:rounded-[40px] p-6 md:p-10 text-white flex flex-col justify-center relative overflow-hidden shadow-2xl shadow-indigo-100"
                 >
                   <div className="absolute -right-20 -top-20 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
                   <div className="absolute -left-10 bottom-0 w-40 h-40 bg-fuchsia-400/20 rounded-full blur-2xl"></div>
                   
-                  <p className="text-sm font-bold uppercase tracking-[0.3em] mb-4 opacity-80 relative z-10">Estimated Monthly Payout (Nett)</p>
-                  <div className="flex items-baseline gap-2 relative z-10 overflow-hidden">
-                    <span className="text-xl md:text-2xl font-light opacity-80">{currency}</span>
-                    <h3 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tighter truncate leading-tight py-2">
+                  <p className="text-[10px] sm:text-sm font-bold uppercase tracking-[0.2em] sm:tracking-[0.3em] mb-2 sm:mb-4 opacity-80 relative z-10 text-center sm:text-left">Estimated Monthly Payout (Nett)</p>
+                  <div className="flex flex-col sm:flex-row items-center sm:items-baseline gap-1 sm:gap-2 relative z-10 overflow-hidden text-center sm:text-left">
+                    <span className="text-lg md:text-2xl font-light opacity-80">{currency}</span>
+                    <h3 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tighter truncate leading-tight py-1 sm:py-2">
                       {Math.floor(displayCalculations.total).toLocaleString()}
-                      <span className="text-xl md:text-3xl opacity-60">.{(displayCalculations.total % 1).toFixed(2).split('.')[1]}</span>
+                      <span className="text-lg md:text-3xl opacity-60">.{(displayCalculations.total % 1).toFixed(2).split('.')[1]}</span>
                     </h3>
                   </div>
                   
-                  <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
-                    <div className="bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/10">
-                      <p className="text-[10px] font-bold uppercase opacity-60 mb-1 tracking-wider">Fixed Monthly Base</p>
-                      <p className="text-xl md:text-2xl font-bold font-mono truncate">{formatValue(displayCalculations.baseAmount)}</p>
+                  <div className="mt-8 sm:mt-12 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 relative z-10">
+                    <div className="bg-white/10 backdrop-blur-md p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 text-center sm:text-left">
+                      <p className="text-[9px] sm:text-[10px] font-bold uppercase opacity-60 mb-0.5 sm:mb-1 tracking-wider">Fixed Monthly Base</p>
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold font-mono truncate">{formatValue(displayCalculations.baseAmount)}</p>
                     </div>
-                    <div className="bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/10">
-                      <p className="text-[10px] font-bold uppercase opacity-60 mb-1 tracking-wider">Total Allowances</p>
-                      <p className="text-xl md:text-2xl font-bold font-mono truncate">{formatValue(displayCalculations.allowancesTotal)}</p>
+                    <div className="bg-white/10 backdrop-blur-md p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 text-center sm:text-left">
+                      <p className="text-[9px] sm:text-[10px] font-bold uppercase opacity-60 mb-0.5 sm:mb-1 tracking-wider">Total Allowances</p>
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold font-mono truncate">{formatValue(displayCalculations.allowancesTotal)}</p>
                     </div>
                   </div>
-                  <p className="mt-8 text-[10px] italic opacity-70 relative z-10">
+                  <p className="mt-6 sm:mt-8 text-[9px] sm:text-[10px] italic opacity-70 relative z-10 text-center sm:text-left">
                     Based on Compensation & Benefit Policy per 1 May 2026
                   </p>
                 </motion.div>
@@ -552,12 +562,12 @@ export default function App() {
                             </ResponsiveContainer>
                           </div>
 
-                          <div className="space-y-4">
-                            <AllowanceChip label="Foreign Service" value={displayCalculations.foreignServiceAllowance} color="indigo" formatValue={formatValue} percent={15} />
-                            <AllowanceChip label="Hardship" value={displayCalculations.hardshipAllowance} color="amber" formatValue={formatValue} percent={55} />
-                            <AllowanceChip label="Field (4%)" value={displayCalculations.fieldAllowance} color="emerald" formatValue={formatValue} percent={4} />
-                            <AllowanceChip label="Travel" value={displayCalculations.travelAllowance} color="fuchsia" formatValue={formatValue} percent={4} />
-                          </div>
+                      <div className="space-y-4 sm:pt-2">
+                        <AllowanceChip label="Foreign Service" value={displayCalculations.foreignServiceAllowance} color="indigo" formatValue={formatValue} percent={15} />
+                        <AllowanceChip label="Hardship" value={displayCalculations.hardshipAllowance} color="amber" formatValue={formatValue} percent={55} />
+                        <AllowanceChip label="Field (4%)" value={displayCalculations.fieldAllowance} color="emerald" formatValue={formatValue} percent={4} />
+                        <AllowanceChip label="Travel" value={displayCalculations.travelAllowance} color="fuchsia" formatValue={formatValue} percent={4} />
+                      </div>
                         </motion.div>
                       ) : activeTab === 'table' ? (
                         <motion.div 
@@ -565,14 +575,15 @@ export default function App() {
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -10 }}
-                          className="max-h-[500px] overflow-y-auto pr-2 custom-scrollbar"
+                          className="max-h-[500px] overflow-auto pr-2 custom-scrollbar"
                         >
+                          <p className="sm:hidden text-[9px] font-bold text-slate-400 uppercase mb-3 text-center tracking-widest">← Swipe to view more →</p>
                           <div className="min-w-[600px]">
                             <table className="w-full text-left border-separate border-spacing-0">
                               <thead>
                                 <tr className="sticky top-0 bg-white z-10">
                                   <th className="pb-4 pt-0 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Field Days</th>
-                                  <th className="pb-4 pt-0 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Total Duty</th>
+                                  <th className="pb-4 pt-0 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Travel Days</th>
                                   <th className="pb-4 pt-0 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Base Salary</th>
                                   <th className="pb-4 pt-0 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Allowances</th>
                                   <th className="pb-4 pt-0 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Total Est.</th>
@@ -582,7 +593,7 @@ export default function App() {
                                 {tableData.map((row) => (
                                   <tr key={row.fieldDays} className={`group hover:bg-slate-50 transition-colors ${row.fieldDays === fieldDays ? 'bg-indigo-50/50' : ''}`}>
                                     <td className="py-4 px-4 font-bold text-indigo-600 text-sm whitespace-nowrap">{row.fieldDays} Days</td>
-                                    <td className="py-4 px-4 text-slate-500 font-medium text-sm whitespace-nowrap">{row.totalDuty} Days</td>
+                                    <td className="py-4 px-4 text-slate-500 font-medium text-sm whitespace-nowrap">{row.travelDays} Days</td>
                                     <td className="py-4 px-4 text-slate-700 font-mono text-sm whitespace-nowrap">{formatValue(row.base)}</td>
                                     <td className="py-4 px-4 text-slate-700 font-mono text-sm whitespace-nowrap">+{formatValue(row.allowances)}</td>
                                     <td className="py-4 px-4 font-black text-slate-900 font-mono text-sm whitespace-nowrap">{formatValue(row.total)}</td>
@@ -695,10 +706,10 @@ export default function App() {
             >
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Domestic Section */}
-                <div className="space-y-6">
-                  <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <div className="space-y-4 sm:space-y-6">
+                  <div className="bg-white p-5 sm:p-8 rounded-[24px] sm:rounded-[32px] border border-slate-100 shadow-sm">
+                    <div className="flex items-center justify-between mb-4 sm:mb-6">
+                      <h3 className="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
                         <MapPin size={18} className="text-indigo-500" />
                         Indonesian Income
                       </h3>
@@ -711,10 +722,10 @@ export default function App() {
                       </button>
                     </div>
                     
-                    <div className="space-y-6">
+                    <div className="space-y-4 sm:space-y-6">
                       {domesticIncomes.map((inc, idx) => (
-                        <div key={idx} className="flex gap-3 items-end">
-                          <div className="flex-1">
+                        <div key={idx} className="flex flex-col sm:flex-row gap-3 items-start sm:items-end p-4 sm:p-0 bg-slate-50 sm:bg-transparent rounded-2xl sm:rounded-none relative">
+                          <div className="w-full sm:flex-1">
                             {idx === 0 && <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-widest">Source Label</label>}
                             <input 
                               type="text" 
@@ -724,13 +735,14 @@ export default function App() {
                                 newIncomes[idx].label = e.target.value;
                                 setDomesticIncomes(newIncomes);
                               }}
-                              className="w-full px-4 py-4 bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl text-sm font-medium outline-none transition-all"
+                              className="w-full px-3 py-3 sm:px-4 sm:py-4 bg-white sm:bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl sm:rounded-2xl text-sm font-medium outline-none transition-all"
                               placeholder="e.g. Gaji Pokok"
                             />
                           </div>
-                          <div className="w-[140px] sm:w-[200px]">
+                          <div className="w-full sm:w-[140px] md:w-[200px]">
                             <CurrencyInput 
-                              label={idx === 0 ? "Amount (IDR)" : ""}
+                              label={idx === 0 ? "Amount (IDR)" : "Amount (IDR)"}
+                              labelClassName="sm:hidden"
                               currency="IDR"
                               value={inc.amount}
                               onChange={(val: number) => {
@@ -743,9 +755,9 @@ export default function App() {
                           {domesticIncomes.length > 1 && (
                             <button 
                               onClick={() => setDomesticIncomes(prev => prev.filter((_, i) => i !== idx))} 
-                              className="p-4 text-slate-300 hover:text-red-500 transition-colors"
+                              className="absolute -top-2 -right-2 sm:static sm:p-4 w-6 h-6 sm:w-auto sm:h-auto rounded-full bg-red-100 sm:bg-transparent text-red-500 flex items-center justify-center transition-colors shadow-sm sm:shadow-none"
                             >
-                              <span className="text-2xl leading-none">×</span>
+                              <span className="text-lg sm:text-2xl leading-none">×</span>
                             </button>
                           )}
                         </div>
@@ -864,15 +876,15 @@ export default function App() {
       </main>
 
       {/* Footer / Status Bar */}
-      <footer className="h-12 px-6 md:px-10 bg-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-400 mt-auto">
-        <div className="flex gap-6 uppercase tracking-wider overflow-hidden">
-          <span className="hidden sm:inline">Engine V2.5.2</span>
-          <span>Mode: {process.env.NODE_ENV === 'production' ? 'Production' : 'Dev'}</span>
-          <span className="hidden sm:inline text-indigo-400">Sources: Open ER-API & Frankfurter</span>
+      <footer className="px-4 md:px-10 py-6 bg-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] font-bold text-slate-400 mt-auto border-t border-slate-200">
+        <div className="flex flex-wrap justify-center sm:justify-start gap-4 sm:gap-6 uppercase tracking-wider">
+          <span className="shrink-0">Engine V2.5.2</span>
+          <span className="shrink-0">Mode: {process.env.NODE_ENV === 'production' ? 'Production' : 'Dev'}</span>
+          <span className="text-indigo-400 shrink-0">Live Finance Sync</span>
         </div>
         <div className="flex items-center gap-2">
-          <Globe size={12} className="text-indigo-400" />
-          <span className="uppercase tracking-wider">Salary & Tax Calculator</span>
+          <Globe size={12} className="text-indigo-400 shrink-0" />
+          <span className="uppercase tracking-wider">Salary & Tax Calculator © 2026</span>
         </div>
       </footer>
     </div>
@@ -911,7 +923,7 @@ function FormulaItem({ label, formula }: { label: string, formula: string }) {
   );
 }
 
-function CurrencyInput({ value, onChange, currency, label, placeholder = "0.00", className = "" }: any) {
+function CurrencyInput({ value, onChange, currency, label, labelClassName = "", placeholder = "0.00", className = "" }: any) {
   const [isFocused, setIsFocused] = useState(false);
   const [inputValue, setInputValue] = useState(value === 0 || !value ? '' : String(value));
 
@@ -938,7 +950,7 @@ function CurrencyInput({ value, onChange, currency, label, placeholder = "0.00",
     }).format(value);
   }, [value, isFocused, inputValue, currency]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     // Remove formatting commas
     let rawVal = e.target.value.replace(/,/g, '');
     
@@ -964,7 +976,7 @@ function CurrencyInput({ value, onChange, currency, label, placeholder = "0.00",
 
   return (
     <div className={`group flex flex-col gap-1.5 ${className}`}>
-      {label && <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">{label}</label>}
+      {label && <label className={`block text-[10px] font-bold text-slate-400 uppercase tracking-widest ${labelClassName}`}>{label}</label>}
       <div className="relative">
         <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
           <span className="text-slate-400 font-bold text-xs">
@@ -974,11 +986,12 @@ function CurrencyInput({ value, onChange, currency, label, placeholder = "0.00",
         </div>
         <input 
           type="text"
+          inputMode="decimal"
           value={displayValue}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           onChange={handleChange}
-          className="w-full pl-14 pr-4 py-3.5 bg-slate-50/50 border-2 border-transparent group-focus-within:border-indigo-500 group-focus-within:bg-white rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all font-mono"
+          className="w-full pl-14 pr-4 py-3 sm:py-3.5 bg-slate-50/50 border-2 border-transparent group-focus-within:border-indigo-500 group-focus-within:bg-white rounded-xl sm:rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all font-mono"
           placeholder={placeholder}
         />
       </div>
@@ -1126,14 +1139,31 @@ function TaxSummary({
 }
 
 function InfoBox({ title, content }: { title: string, content: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+
   return (
     <div className="group relative inline-block">
-      <Info size={12} className="text-slate-500 hover:text-indigo-400 cursor-help transition-colors" />
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-slate-800 text-[10px] rounded-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50 shadow-2xl border border-slate-700 invisible group-hover:visible">
-        <p className="font-bold mb-1.5 text-indigo-400 border-b border-white/10 pb-1">{title}</p>
-        <p className="leading-relaxed text-slate-300">{content}</p>
-        <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-slate-800"></div>
-      </div>
+      <Info 
+        size={12} 
+        className="text-slate-500 hover:text-indigo-400 cursor-help transition-colors" 
+        onClick={() => setIsOpen(!isOpen)}
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => setIsOpen(false)}
+      />
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 5 }}
+            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-slate-800 text-[10px] rounded-xl z-50 shadow-2xl border border-slate-700"
+          >
+            <p className="font-bold mb-1.5 text-indigo-400 border-b border-white/10 pb-1">{title}</p>
+            <p className="leading-relaxed text-slate-300">{content}</p>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-slate-800"></div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

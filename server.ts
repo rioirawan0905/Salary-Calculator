@@ -22,16 +22,19 @@ async function startServer() {
 
   // Proxy for latest exchange rate
   app.get("/api/latest", async (req, res) => {
-    console.log('Fetching latest exchange rates...');
+    console.log('Fetching latest exchange rates from Frankfurter...');
     try {
-      const response = await fetch('https://open.er-api.com/v6/latest/USD');
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await fetch('https://api.frankfurter.app/latest?from=USD&to=IDR');
+      if (!response.ok) {
+        console.error(`Frankfurter API error: ${response.status} ${response.statusText}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const data = await response.json();
-      console.log('Successfully fetched latest rates');
+      console.log('Successfully fetched latest rates:', data.rates);
       res.json(data);
     } catch (error) {
       console.error('Proxy Error (latest):', error);
-      res.status(500).json({ error: 'Failed to fetch latest data' });
+      res.status(500).json({ error: 'Failed to fetch latest data', details: error instanceof Error ? error.message : String(error) });
     }
   });
 

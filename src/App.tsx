@@ -773,23 +773,32 @@ export default function App() {
                         onChange={(e) => setPtkpStatus(e.target.value)}
                         className="w-full pl-6 pr-12 py-5 bg-slate-50 border-2 border-transparent rounded-2xl text-base font-bold text-slate-700 outline-none focus:border-indigo-500 appearance-none cursor-pointer hover:bg-slate-100/50 transition-all"
                       >
-                        <option value="TK/0">TK/0 (Lajang, Tanpa Tanggungan) - IDR 54jt</option>
-                        <option value="TK/1">TK/1 (Lajang, 1 Tanggungan) - IDR 58.5jt</option>
-                        <option value="TK/2">TK/2 (Lajang, 2 Tanggungan) - IDR 63jt</option>
-                        <option value="TK/3">TK/3 (Lajang, 3 Tanggungan) - IDR 67.5jt</option>
-                        <option value="K/0">K/0 (Menikah, Tanpa Tanggungan) - IDR 58.5jt</option>
-                        <option value="K/1">K/1 (Menikah, 1 Tanggungan) - IDR 63jt</option>
-                        <option value="K/2">K/2 (Menikah, 2 Tanggungan) - IDR 67.5jt</option>
-                        <option value="K/3">K/3 (Menikah, 3 Tanggungan) - IDR 72jt</option>
-                        <option value="K/I/0">K/I/0 (Menikah, Istri Gabung, 0 Tanggungan) - IDR 112.5jt</option>
+                        <option value="TK/0">TK/0 (Lajang/Single, 0 Tanggungan) - Rp 54.000.000</option>
+                        <option value="TK/1">TK/1 (Lajang/Single, 1 Tanggungan) - Rp 58.500.000</option>
+                        <option value="TK/2">TK/2 (Lajang/Single, 2 Tanggungan) - Rp 63.000.000</option>
+                        <option value="TK/3">TK/3 (Lajang/Single, 3 Tanggungan) - Rp 67.500.000</option>
+                        <option value="K/0">K/0 (Menikah/Married, 0 Tanggungan) - Rp 58.500.000</option>
+                        <option value="K/1">K/1 (Menikah/Married, 1 Tanggungan) - Rp 63.000.000</option>
+                        <option value="K/2">K/2 (Menikah/Married, 2 Tanggungan) - Rp 67.500.000</option>
+                        <option value="K/3">K/3 (Menikah/Married, 3 Tanggungan) - Rp 72.000.000</option>
+                        <option value="K/I/0">K/I/0 (Menikah, Istri Gabung, 0 Tanggungan) - Rp 112.500.000</option>
                       </select>
                       <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                         <ChevronRight size={20} className="rotate-90" />
                       </div>
                     </div>
-                    <p className="mt-4 text-xs text-slate-400 font-medium italic bg-slate-50 p-4 rounded-xl border border-slate-100">
-                      PTKP (Penghasilan Tidak Kena Pajak) digunakan untuk mengurangi total penghasilan bruto sebelum dikenakan tarif pajak progresif Pasal 17.
-                    </p>
+                    
+                    <div className="mt-6 p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100/50">
+                      <p className="text-xs font-bold text-indigo-900 mb-2 flex items-center gap-2">
+                        How is PTKP calculated?
+                      </p>
+                      <ul className="text-[10px] space-y-2 text-indigo-700/80 leading-relaxed list-disc pl-4">
+                        <li><strong>Standard Self:</strong> Rp 54,000,000 / year</li>
+                        <li><strong>Marriage Status (K):</strong> Add Rp 4,500,000</li>
+                        <li><strong>Dependents (0-3):</strong> Add Rp 4,500,000 per dependent</li>
+                        <li><strong>Combined Income (K/I):</strong> Double the base for joint husband & wife</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
 
@@ -1062,32 +1071,62 @@ function TaxSummary({
 
         <div className="grid grid-cols-1 gap-3 text-sm">
           <div className="flex justify-between border-b border-white/10 pb-2">
-            <span className="text-slate-400">Total Net PKP</span>
+            <span className="text-slate-400 flex items-center gap-1.5">
+              Net PKP 
+              <InfoBox title="PKP (Penghasilan Kena Pajak)" content="The portion of your income that is subject to tax after subtracting the non-taxable amount (PTKP)." />
+            </span>
             <span className="font-bold">{f(results.pkp)}</span>
           </div>
           <div className="flex justify-between border-b border-white/10 pb-2">
-            <span className="text-slate-400">Pajak Terutang (Total)</span>
+            <span className="text-slate-400 flex items-center gap-1.5">
+              PPh 21 Terutang 
+              <InfoBox title="PPh 21" content="Income tax calculated based on progressive brackets (5% up to 35%) applied to your PKP." />
+            </span>
             <span className="font-bold">{f(results.totalTaxDue)}</span>
           </div>
           <div className="flex justify-between border-b border-white/10 pb-2">
-            <span className="text-slate-400">Kredit Pajak (Ps 24)</span>
+            <span className="text-slate-400 flex items-center gap-1.5">
+              PPh 24 Credit
+              <InfoBox title="PPh 24 (Pasal 24)" content="A tax credit allowed for income tax already paid in a foreign country (Algeria/IRG) to prevent double taxation." />
+            </span>
             <span className="font-bold text-emerald-400">-{f(results.finalKPLN)}</span>
           </div>
           <div className="flex justify-between border-b border-white/10 pb-2">
-            <span className="text-slate-400">PPh Dipotong Domestic</span>
+            <span className="text-slate-400">Domestic Withholding</span>
             <span className="font-bold text-emerald-400">-{f(domesticTaxPaid)}</span>
           </div>
         </div>
 
-        <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-          <p className="text-[10px] font-bold uppercase opacity-60 mb-2">Ps 24 Maximum Credit Limit</p>
+        <div className="bg-white/5 p-5 rounded-2xl border border-white/10">
+          <div className="flex items-center gap-2 mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-300">Pasal 24 Credit Rule</p>
+            <InfoBox title="Pasal 24 Limit" content="The credit is limited to the lesser of: (A) Real tax paid abroad OR (B) Max domestic tax proportion of the foreign income." />
+          </div>
           <div className="flex justify-between items-center">
-            <p className="text-lg font-bold">{f(results.maxCredit)}</p>
-            <div className="text-[10px] font-medium opacity-50 px-2 py-0.5 bg-white/10 rounded">
-              Actual: {f(results.foreignTaxIDR)}
+            <div>
+              <p className="text-[9px] text-slate-500 uppercase font-bold mb-1">Max Credit Limit</p>
+              <p className="text-lg font-bold">{f(results.maxCredit)}</p>
+            </div>
+            <div className="h-8 w-[1px] bg-white/10"></div>
+            <div className="text-right">
+              <p className="text-[9px] text-slate-500 uppercase font-bold mb-1">Actual Foreign Tax</p>
+              <p className="text-sm font-bold opacity-80">{f(results.foreignTaxIDR)}</p>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoBox({ title, content }: { title: string, content: string }) {
+  return (
+    <div className="group relative inline-block">
+      <Info size={12} className="text-slate-500 hover:text-indigo-400 cursor-help transition-colors" />
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-slate-800 text-[10px] rounded-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50 shadow-2xl border border-slate-700 invisible group-hover:visible">
+        <p className="font-bold mb-1.5 text-indigo-400 border-b border-white/10 pb-1">{title}</p>
+        <p className="leading-relaxed text-slate-300">{content}</p>
+        <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-slate-800"></div>
       </div>
     </div>
   );

@@ -40,7 +40,7 @@ interface HistoricalRate {
 }
 
 export default function App() {
-  const [baseSalary, setBaseSalary] = useState<number>(8300);
+  const [baseSalary, setBaseSalary] = useState<number>(0);
   const [fieldDays, setFieldDays] = useState<number>(28);
   const [travelDays, setTravelDays] = useState<number>(2);
   const [currency, setCurrency] = useState<Currency>('USD');
@@ -61,6 +61,8 @@ export default function App() {
   const [domesticTaxPaid, setDomesticTaxPaid] = useState<number>(0);
   const [foreignIncomeDZD, setForeignIncomeDZD] = useState<number>(0);
   const [foreignTaxDZD, setForeignTaxDZD] = useState<number>(0);
+  const [pensionContribution, setPensionContribution] = useState<number>(0); // Monthly iuran pensiun/JHT
+  const [otherDeductions, setOtherDeductions] = useState<number>(0); // Monthly general deductions
 
   // On Duty Days is now computed: fieldDays + travelDays
   const onDutyDays = useMemo(() => fieldDays + travelDays, [fieldDays, travelDays]);
@@ -308,17 +310,19 @@ export default function App() {
       </nav>
 
       {/* Main Tab Switcher */}
-      <div className="bg-white border-b border-slate-100 px-4 md:px-10 flex gap-4 md:gap-8 overflow-x-auto no-scrollbar">
+      <div className="bg-white border-b border-slate-100 px-4 md:px-10 flex justify-center gap-4 md:gap-8 overflow-x-auto no-scrollbar">
         <button 
           onClick={() => setActiveView('salary')}
-          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${activeView === 'salary' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'salary' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
         >
+          <Calculator size={16} />
           Salary Calculator
         </button>
         <button 
           onClick={() => setActiveView('tax')}
-          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 ${activeView === 'tax' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'tax' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
         >
+          <ReceiptText size={16} />
           Global Tax Calculator
         </button>
       </div>
@@ -763,14 +767,40 @@ export default function App() {
                         </div>
                       ))}
                       
-                      <div className="pt-8 mt-8 border-t border-slate-50">
+                    {/* Deductions Section */}
+                    <div className="pt-8 mt-8 border-t border-slate-50">
+                      <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <ReceiptText size={16} className="text-indigo-500" />
+                        Monthly Deductions (Indo)
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <CurrencyInput 
-                          label="PPh Already Paid (Bukti Potong PPh 21)"
+                          label="JHT/Pension (Iuran)"
                           currency="IDR"
-                          value={domesticTaxPaid}
-                          onChange={setDomesticTaxPaid}
+                          value={pensionContribution}
+                          onChange={setPensionContribution}
+                          placeholder="Employee portion"
+                        />
+                        <CurrencyInput 
+                          label="Other Deductions"
+                          currency="IDR"
+                          value={otherDeductions}
+                          onChange={setOtherDeductions}
                         />
                       </div>
+                      <p className="mt-3 text-[10px] text-slate-400 italic">
+                        * Biaya Jabatan (5%) will be calculated automatically up to Rp 500k/month.
+                      </p>
+                    </div>
+
+                    <div className="pt-8 mt-8 border-t border-slate-50">
+                      <CurrencyInput 
+                        label="PPh Already Paid (Bukti Potong PPh 21)"
+                        currency="IDR"
+                        value={domesticTaxPaid}
+                        onChange={setDomesticTaxPaid}
+                      />
+                    </div>
                     </div>
                   </div>
 
@@ -867,6 +897,8 @@ export default function App() {
                     foreignTaxDZD={foreignTaxDZD}
                     dzdToIdrRate={dzdToIdrRate}
                     ptkpStatus={ptkpStatus}
+                    pensionContribution={pensionContribution}
+                    otherDeductions={otherDeductions}
                   />
                 </div>
               </div>
@@ -1005,133 +1037,192 @@ function TaxSummary({
   foreignIncomeDZD, 
   foreignTaxDZD, 
   dzdToIdrRate, 
-  ptkpStatus 
+  ptkpStatus,
+  pensionContribution,
+  otherDeductions
 }: any) {
   const ptkpMap: Record<string, number> = {
     'TK/0': 54000000, 'TK/1': 58500000, 'TK/2': 63000000, 'TK/3': 67500000,
     'K/0': 58500000, 'K/1': 63000000, 'K/2': 67500000, 'K/3': 72000000,
     'K/I/0': 112500000
   };
+  
+  const brackets = [
+    { label: '5%', min: 0, max: 60000000, rate: 0.05, color: '#10b981' },
+    { label: '15%', min: 60000000, max: 250000000, rate: 0.15, color: '#3b82f6' },
+    { label: '25%', min: 250000000, max: 500000000, rate: 0.25, color: '#f59e0b' },
+    { label: '30%', min: 500000000, max: 5000000000, rate: 0.30, color: '#ef4444' },
+    { label: '35%', min: 5000000000, max: Infinity, rate: 0.35, color: '#7c3aed' }
+  ];
 
-  const calculatePPh21 = (pkp: number) => {
+  const calculateDetailedPPh21 = (pkp: number) => {
     let tax = 0;
-    const brackets = [
-      { max: 60000000, rate: 0.05 },
-      { max: 250000000, rate: 0.15 },
-      { max: 500000000, rate: 0.25 },
-      { max: 5000000000, rate: 0.30 },
-      { max: Infinity, rate: 0.35 }
-    ];
-
+    const details = [];
     let remainingPKP = pkp;
-    let prevMax = 0;
 
     for (const bracket of brackets) {
-      const taxableInRange = Math.min(remainingPKP, bracket.max - prevMax);
+      const taxableInRange = Math.min(remainingPKP, bracket.max - bracket.min);
       if (taxableInRange > 0) {
-        tax += taxableInRange * bracket.rate;
+        const bracketTax = taxableInRange * bracket.rate;
+        tax += bracketTax;
+        details.push({
+          ...bracket,
+          amount: taxableInRange,
+          tax: bracketTax
+        });
         remainingPKP -= taxableInRange;
-        prevMax = bracket.max;
       } else {
         break;
       }
     }
-    return tax;
+    return { tax, details };
   };
 
   const results = useMemo(() => {
-    const totalDomestic = domesticIncomes.reduce((acc: number, curr: any) => acc + curr.amount, 0);
-    const foreignIncomeIDR = foreignIncomeDZD * dzdToIdrRate;
-    const foreignTaxIDR = foreignTaxDZD * dzdToIdrRate;
+    const annualDomestic = domesticIncomes.reduce((acc: number, curr: any) => acc + curr.amount, 0) * 12;
+    const annualForeignIncomeIDR = (foreignIncomeDZD * dzdToIdrRate) * 12;
+    const annualForeignTaxIDR = (foreignTaxDZD * dzdToIdrRate) * 12;
     
-    const ptpkValue = ptkpMap[ptkpStatus] || 54000000;
-    const totalIncome = totalDomestic + foreignIncomeIDR;
-    const pkp = Math.max(0, totalIncome - ptpkValue);
+    const ptkpValue = ptkpMap[ptkpStatus] || 54000000;
+    const annualGrossIncome = annualDomestic + annualForeignIncomeIDR;
     
-    const totalTaxDue = calculatePPh21(pkp);
+    // Deductions: Biaya Jabatan (5% max 6M/year) + Pension + Other
+    const biayaJabatan = Math.min(annualGrossIncome * 0.05, 6000000);
+    const totalDeductions = biayaJabatan + (pensionContribution * 12) + (otherDeductions * 12);
     
-    // Pasal 24 Logic
-    const maxCredit = totalIncome > 0 ? (foreignIncomeIDR / totalIncome) * totalTaxDue : 0;
-    const finalKPLN = Math.min(foreignTaxIDR, maxCredit);
+    const pkp = Math.max(0, annualGrossIncome - totalDeductions - ptkpValue);
     
-    const totalTaxPayable = Math.max(0, totalTaxDue - finalKPLN - domesticTaxPaid);
-    const taxStatus = (totalTaxDue - finalKPLN - domesticTaxPaid) < 0 ? 'Lebih Bayar' : 'Kurang Bayar';
+    const { tax: annualTaxDue, details: bracketDetails } = calculateDetailedPPh21(pkp);
+    
+    // Pasal 24 Logic (Annualized)
+    const maxCredit = annualGrossIncome > 0 ? (annualForeignIncomeIDR / annualGrossIncome) * annualTaxDue : 0;
+    const finalKPLN = Math.min(annualForeignTaxIDR, maxCredit);
+    
+    // Total Credit = PPh 24 + Domestic witholding (Annual)
+    const totalCredit = finalKPLN + (domesticTaxPaid * 12);
+    const annualTaxPayable = Math.max(0, annualTaxDue - totalCredit);
+    const monthlyTaxPayable = annualTaxPayable / 12;
+    
+    const taxStatus = (annualTaxDue - totalCredit) < 0 ? 'Lebih Bayar (Annual)' : 'Kurang Bayar (Annual)';
 
     return {
-      totalDomestic,
-      foreignIncomeIDR,
-      foreignTaxIDR,
-      totalIncome,
+      annualGrossIncome,
       pkp,
-      totalTaxDue,
+      annualTaxDue,
       maxCredit,
       finalKPLN,
-      totalTaxPayable,
+      annualTaxPayable,
+      monthlyTaxPayable,
       taxStatus,
-      ptpkValue
+      ptkpValue,
+      biayaJabatan,
+      totalDeductions,
+      bracketDetails,
+      annualForeignTaxIDR
     };
-  }, [domesticIncomes, foreignIncomeDZD, foreignTaxDZD, dzdToIdrRate, ptkpStatus, domesticTaxPaid]);
+  }, [domesticIncomes, foreignIncomeDZD, foreignTaxDZD, dzdToIdrRate, ptkpStatus, domesticTaxPaid, pensionContribution, otherDeductions]);
 
   const f = (val: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
 
   return (
-    <div className="bg-slate-900 text-white p-8 rounded-[40px] shadow-xl relative overflow-hidden">
-      <div className="absolute top-0 right-0 p-8 opacity-10">
-        <ReceiptText size={120} />
-      </div>
-      
-      <div className="relative z-10 space-y-6">
-        <div>
-          <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px] mb-2">Final {results.taxStatus}</p>
-          <h4 className={`text-4xl font-black ${results.totalTaxPayable === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-            {f(Math.abs(results.totalTaxPayable))}
-          </h4>
+    <div className="flex flex-col gap-6">
+      <div className="bg-slate-900 text-white p-8 rounded-[40px] shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-8 opacity-10">
+          <ReceiptText size={120} />
         </div>
-
-        <div className="grid grid-cols-1 gap-3 text-sm">
-          <div className="flex justify-between border-b border-white/10 pb-2">
-            <span className="text-slate-400 flex items-center gap-1.5">
-              Net PKP 
-              <InfoBox title="PKP (Penghasilan Kena Pajak)" content="The portion of your income that is subject to tax after subtracting the non-taxable amount (PTKP)." />
-            </span>
-            <span className="font-bold">{f(results.pkp)}</span>
-          </div>
-          <div className="flex justify-between border-b border-white/10 pb-2">
-            <span className="text-slate-400 flex items-center gap-1.5">
-              PPh 21 Terutang 
-              <InfoBox title="PPh 21" content="Income tax calculated based on progressive brackets (5% up to 35%) applied to your PKP." />
-            </span>
-            <span className="font-bold">{f(results.totalTaxDue)}</span>
-          </div>
-          <div className="flex justify-between border-b border-white/10 pb-2">
-            <span className="text-slate-400 flex items-center gap-1.5">
-              PPh 24 Credit
-              <InfoBox title="PPh 24 (Pasal 24)" content="A tax credit allowed for income tax already paid in a foreign country (Algeria/IRG) to prevent double taxation." />
-            </span>
-            <span className="font-bold text-emerald-400">-{f(results.finalKPLN)}</span>
-          </div>
-          <div className="flex justify-between border-b border-white/10 pb-2">
-            <span className="text-slate-400">Domestic Withholding</span>
-            <span className="font-bold text-emerald-400">-{f(domesticTaxPaid)}</span>
-          </div>
-        </div>
-
-        <div className="bg-white/5 p-5 rounded-2xl border border-white/10">
-          <div className="flex items-center gap-2 mb-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-300">Pasal 24 Credit Rule</p>
-            <InfoBox title="Pasal 24 Limit" content="The credit is limited to the lesser of: (A) Real tax paid abroad OR (B) Max domestic tax proportion of the foreign income." />
-          </div>
-          <div className="flex justify-between items-center">
+        
+        <div className="relative z-10 space-y-6">
+          <div className="flex justify-between items-start">
             <div>
-              <p className="text-[9px] text-slate-500 uppercase font-bold mb-1">Max Credit Limit</p>
-              <p className="text-lg font-bold">{f(results.maxCredit)}</p>
+              <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px] mb-2">{results.taxStatus}</p>
+              <h4 className={`text-4xl font-black ${results.annualTaxPayable === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {f(Math.abs(results.annualTaxPayable))}
+              </h4>
+              <p className="text-xs text-slate-500 mt-1">Monthly Approx: <span className="text-white font-bold">{f(results.monthlyTaxPayable)}</span></p>
             </div>
-            <div className="h-8 w-[1px] bg-white/10"></div>
             <div className="text-right">
-              <p className="text-[9px] text-slate-500 uppercase font-bold mb-1">Actual Foreign Tax</p>
-              <p className="text-sm font-bold opacity-80">{f(results.foreignTaxIDR)}</p>
+              <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px] mb-2">Annual Gross</p>
+              <p className="text-lg font-bold text-white">{f(results.annualGrossIncome)}</p>
             </div>
           </div>
+
+          <div className="grid grid-cols-1 gap-2 text-sm">
+            <div className="flex justify-between border-b border-white/10 pb-2">
+              <span className="text-slate-400">Total Deductions (Jabatan+Others)</span>
+              <span className="font-bold text-red-400">-{f(results.totalDeductions)}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/10 pb-2">
+              <span className="text-slate-400">Status PTKP ({ptkpStatus})</span>
+              <span className="font-bold text-red-400">-{f(results.ptkpValue)}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/10 pb-2 bg-white/5 px-2 py-1 rounded">
+              <span className="text-indigo-300 font-bold">Net PKP (Annual)</span>
+              <span className="font-black text-indigo-300">{f(results.pkp)}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/10 pb-2 pt-2">
+              <span className="text-slate-400">Total PPh 21 Terutang</span>
+              <span className="font-bold">{f(results.annualTaxDue)}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/10 pb-2">
+              <span className="text-slate-400">Pasal 24 Credit (Overseas Tax)</span>
+              <span className="font-bold text-emerald-400">-{f(results.finalKPLN)}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/10 pb-2 text-[10px] italic text-slate-500 pl-4">
+              <span>Actual IRG Tax Paid: {f(results.annualForeignTaxIDR)}</span>
+              <span>Prop. Limit: {f(results.maxCredit)}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/10 pb-2">
+              <span className="text-slate-400">Indo Withholding Paid</span>
+              <span className="font-bold text-emerald-400">-{f(domesticTaxPaid * 12)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Progressive Bracket Visualization */}
+      <div className="bg-white p-5 sm:p-6 rounded-[32px] border border-slate-100 shadow-sm">
+        <h5 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <TrendingUp size={16} className="text-indigo-500" />
+          Progressive Tax Brackets (HPP Law)
+        </h5>
+        <div className="space-y-2.5">
+          {brackets.map((bracket, idx) => {
+            const detail = results.bracketDetails.find((d: any) => d.label === bracket.label);
+            const isFilled = !!detail;
+            
+            return (
+              <div key={idx} className={`relative p-2.5 sm:p-3.5 rounded-2xl border-2 transition-all ${isFilled ? 'border-indigo-100 bg-indigo-50/30' : 'border-slate-50 bg-slate-50/20 opacity-50'}`}>
+                <div className="flex justify-between items-center mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <span 
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black text-white" 
+                      style={{ backgroundColor: bracket.color }}
+                    >
+                      {bracket.label}
+                    </span>
+                    <p className="text-xs font-bold text-slate-700">
+                      Tier {idx + 1}: {bracket.min === 0 ? 'Up to' : 'Above'} {f(bracket.min)}
+                    </p>
+                  </div>
+                  {isFilled && <span className="text-[10px] font-black text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full uppercase">Active</span>}
+                </div>
+                {isFilled ? (
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-[9px] text-slate-400 uppercase font-bold">Taxable Amount</p>
+                      <p className="text-xs font-mono font-bold text-slate-600">{f(detail.amount)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] text-slate-400 uppercase font-bold">Tier Tax</p>
+                      <p className="text-xs font-mono font-black text-slate-900">+{f(detail.tax)}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-1"></div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

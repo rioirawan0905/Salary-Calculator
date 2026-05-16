@@ -32,6 +32,14 @@ import {
 } from 'recharts';
 import * as XLSX from 'xlsx';
 
+const ptkpMap: Record<string, number> = {
+  'TK/0': 54000000, 'TK/1': 58500000, 'TK/2': 63000000, 'TK/3': 67500000,
+  'K/0': 58500000, 'K/1': 63000000, 'K/2': 67500000, 'K/3': 72000000,
+  'K/I/0': 112500000
+};
+
+const f = (val: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
+
 type Currency = 'USD' | 'IDR';
 
 interface HistoricalRate {
@@ -44,7 +52,7 @@ export default function App() {
   const [fieldDays, setFieldDays] = useState<number>(28);
   const [travelDays, setTravelDays] = useState<number>(2);
   const [currency, setCurrency] = useState<Currency>('USD');
-  const [exchangeRate, setExchangeRate] = useState<number>(16150);
+  const [exchangeRate, setExchangeRate] = useState<number>(17522);
   const [lastUpdated, setLastUpdated] = useState<string>('Initializing');
   const [isFetchingRate, setIsFetchingRate] = useState(false);
   const [activeView, setActiveView] = useState<'salary' | 'tax'>('salary');
@@ -52,9 +60,10 @@ export default function App() {
   const [historyPair, setHistoryPair] = useState<'USD/IDR' | 'DZD/IDR' | 'DZD/USD'>('USD/IDR');
   const [historicalData, setHistoricalData] = useState<HistoricalRate[]>([]);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+  const [rateProvider, setRateProvider] = useState<string>('Default');
 
   // Tax Calculator State
-  const [dzdToIdrRate, setDzdToIdrRate] = useState<number>(115); // Example rate
+  const [dzdToIdrRate, setDzdToIdrRate] = useState<number>(130.5); 
   const [ptkpStatus, setPtkpStatus] = useState<string>('TK/0');
   const [domesticIncomes, setDomesticIncomes] = useState<{ label: string, amount: number }[]>([
     { label: 'Gaji Pokok', amount: 0 }
@@ -96,6 +105,7 @@ export default function App() {
           const dzdInIdr = (1 / data.rates.DZD) * data.rates.IDR;
           setDzdToIdrRate(dzdInIdr);
         }
+        setRateProvider(data.provider || 'API');
         setLastUpdated(new Date().toLocaleTimeString());
       } else {
         setLastUpdated('Data error');
@@ -728,45 +738,41 @@ export default function App() {
               exit={{ opacity: 0, scale: 0.98 }}
               className="space-y-8"
             >
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Domestic Section */}
-                <div className="space-y-4 sm:space-y-6">
-                  <div className="bg-white p-5 sm:p-8 rounded-[24px] sm:rounded-[32px] border border-slate-100 shadow-sm">
-                    <div className="flex items-center justify-between mb-4 sm:mb-6">
-                      <h3 className="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <MapPin size={18} className="text-indigo-500" />
+              <div className="space-y-6">
+                {/* Top Row: Input Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left: Indonesian Income */}
+                  <div className="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex flex-col h-full">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <MapPin size={16} className="text-indigo-500" />
                         Indonesian Income
                       </h3>
                       <button 
                         onClick={() => setDomesticIncomes(prev => [...prev, { label: 'Bonus/Other', amount: 0 }])}
-                        className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors shadow-sm"
+                        className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors"
                         title="Add Item"
                       >
-                        <span className="text-2xl font-bold">+</span>
+                        <span className="text-xl font-bold">+</span>
                       </button>
                     </div>
                     
-                    <div className="space-y-4 sm:space-y-6">
+                    <div className="space-y-4 flex-1">
                       {domesticIncomes.map((inc, idx) => (
-                        <div key={idx} className="flex flex-col sm:flex-row gap-3 items-start sm:items-end p-4 sm:p-0 bg-slate-50 sm:bg-transparent rounded-2xl sm:rounded-none relative">
-                          <div className="w-full sm:flex-1">
-                            {idx === 0 && <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-widest">Source Label</label>}
-                            <input 
-                              type="text" 
-                              value={inc.label}
-                              onChange={(e) => {
-                                const newIncomes = [...domesticIncomes];
-                                newIncomes[idx].label = e.target.value;
-                                setDomesticIncomes(newIncomes);
-                              }}
-                              className="w-full px-3 py-3 sm:px-4 sm:py-4 bg-white sm:bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl sm:rounded-2xl text-sm font-medium outline-none transition-all"
-                              placeholder="e.g. Gaji Pokok"
-                            />
-                          </div>
-                          <div className="w-full sm:w-[140px] md:w-[200px]">
+                        <div key={idx} className="space-y-2 relative group">
+                          <input 
+                            type="text" 
+                            value={inc.label}
+                            onChange={(e) => {
+                              const newIncomes = [...domesticIncomes];
+                              newIncomes[idx].label = e.target.value;
+                              setDomesticIncomes(newIncomes);
+                            }}
+                            className="w-full px-3 py-2 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl text-xs font-medium outline-none transition-all"
+                            placeholder="Label (e.g. Gaji)"
+                          />
+                          <div className="flex gap-2 items-center">
                             <CurrencyInput 
-                              label={idx === 0 ? "Amount (IDR)" : "Amount (IDR)"}
-                              labelClassName="sm:hidden"
                               currency="IDR"
                               value={inc.amount}
                               onChange={(val: number) => {
@@ -774,156 +780,148 @@ export default function App() {
                                 newIncomes[idx].amount = val;
                                 setDomesticIncomes(newIncomes);
                               }}
+                              className="flex-1"
+                              inputClassName="py-2.5"
                             />
+                            {domesticIncomes.length > 1 && (
+                              <button 
+                                onClick={() => setDomesticIncomes(prev => prev.filter((_, i) => i !== idx))} 
+                                className="p-2 text-red-400 hover:text-red-600 transition-colors"
+                              >
+                                <span className="text-xl leading-none">×</span>
+                              </button>
+                            )}
                           </div>
-                          {domesticIncomes.length > 1 && (
-                            <button 
-                              onClick={() => setDomesticIncomes(prev => prev.filter((_, i) => i !== idx))} 
-                              className="absolute -top-2 -right-2 sm:static sm:p-4 w-6 h-6 sm:w-auto sm:h-auto rounded-full bg-red-100 sm:bg-transparent text-red-500 flex items-center justify-center transition-colors shadow-sm sm:shadow-none"
-                            >
-                              <span className="text-lg sm:text-2xl leading-none">×</span>
-                            </button>
-                          )}
                         </div>
                       ))}
                       
-                    {/* Deductions Section */}
-                    <div className="pt-8 mt-8 border-t border-slate-50">
-                      <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <ReceiptText size={16} className="text-indigo-500" />
-                        Monthly Deductions (Indo)
-                      </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <CurrencyInput 
-                          label="JHT/Pension (Iuran)"
-                          currency="IDR"
-                          value={pensionContribution}
-                          onChange={setPensionContribution}
-                          placeholder="Employee portion"
-                        />
-                        <CurrencyInput 
-                          label="Other Deductions"
-                          currency="IDR"
-                          value={otherDeductions}
-                          onChange={setOtherDeductions}
-                        />
-                      </div>
-                      <p className="mt-3 text-[10px] text-slate-400 italic">
-                        * Biaya Jabatan (5%) will be calculated automatically up to Rp 500k/month.
-                      </p>
-                    </div>
-
-                    <div className="pt-8 mt-8 border-t border-slate-50">
-                      <CurrencyInput 
-                        label="PPh Already Paid (Bukti Potong PPh 21)"
-                        currency="IDR"
-                        value={domesticTaxPaid}
-                        onChange={setDomesticTaxPaid}
-                      />
-                    </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                      <Info size={18} className="text-indigo-500" />
-                      Status PTKP
-                    </h3>
-                    <div className="relative">
-                      <select 
-                        value={ptkpStatus} 
-                        onChange={(e) => setPtkpStatus(e.target.value)}
-                        className="w-full pl-6 pr-12 py-5 bg-slate-50 border-2 border-transparent rounded-2xl text-base font-bold text-slate-700 outline-none focus:border-indigo-500 appearance-none cursor-pointer hover:bg-slate-100/50 transition-all"
-                      >
-                        <option value="TK/0">TK/0 (Lajang/Single, 0 Tanggungan) - Rp 54.000.000</option>
-                        <option value="TK/1">TK/1 (Lajang/Single, 1 Tanggungan) - Rp 58.500.000</option>
-                        <option value="TK/2">TK/2 (Lajang/Single, 2 Tanggungan) - Rp 63.000.000</option>
-                        <option value="TK/3">TK/3 (Lajang/Single, 3 Tanggungan) - Rp 67.500.000</option>
-                        <option value="K/0">K/0 (Menikah/Married, 0 Tanggungan) - Rp 58.500.000</option>
-                        <option value="K/1">K/1 (Menikah/Married, 1 Tanggungan) - Rp 63.000.000</option>
-                        <option value="K/2">K/2 (Menikah/Married, 2 Tanggungan) - Rp 67.500.000</option>
-                        <option value="K/3">K/3 (Menikah/Married, 3 Tanggungan) - Rp 72.000.000</option>
-                        <option value="K/I/0">K/I/0 (Menikah, Istri Gabung, 0 Tanggungan) - Rp 112.500.000</option>
-                      </select>
-                      <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                        <ChevronRight size={20} className="rotate-90" />
-                      </div>
-                    </div>
-                    
-                    <div className="mt-6 p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100/50">
-                      <p className="text-xs font-bold text-indigo-900 mb-2 flex items-center gap-2">
-                        How is PTKP calculated?
-                      </p>
-                      <ul className="text-[10px] space-y-2 text-indigo-700/80 leading-relaxed list-disc pl-4">
-                        <li><strong>Standard Self:</strong> Rp 54,000,000 / year</li>
-                        <li><strong>Marriage Status (K):</strong> Add Rp 4,500,000</li>
-                        <li><strong>Dependents (0-3):</strong> Add Rp 4,500,000 per dependent</li>
-                        <li><strong>Combined Income (K/I):</strong> Double the base for joint husband & wife</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Foreign Section */}
-                <div className="space-y-6">
-                  <div className="bg-indigo-600 p-8 rounded-[32px] text-white shadow-xl shadow-indigo-200 relative overflow-hidden">
-                    <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
-                    <div className="relative z-10">
-                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                        <Globe size={18} className="text-indigo-200" />
-                        Foreign Income (Algeria)
-                        <InfoBox title="IRG Certification" content="Salarie Imposable & IRG Tax comes from the IRG Certificate" />
-                      </h3>
-                      <div className="space-y-6">
-                        <CurrencyInput 
-                          label="Salarie Imposable (DZD)"
-                          currency="DZD"
-                          value={foreignIncomeDZD}
-                          onChange={setForeignIncomeDZD}
-                          className="text-white"
-                        />
-                        <CurrencyInput 
-                          label="IRG Tax Paid Abroad (DZD)"
-                          currency="DZD"
-                          value={foreignTaxDZD}
-                          onChange={setForeignTaxDZD}
-                        />
-                        <div className="pt-6 mt-2 border-t border-white/10">
-                          <label className="block text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-3 flex justify-between items-center">
-                            <span>DZD Rate ({lastUpdated !== 'Initializing' ? 'Sync Live' : 'Custom'})</span>
-                            <span className="text-white font-mono tracking-normal bg-white/20 px-2 py-0.5 rounded flex items-center gap-1.5">
-                              {lastUpdated !== 'Initializing' && lastUpdated !== 'Sync failed' && <span className="w-1 h-1 bg-emerald-400 rounded-full animate-pulse"></span>}
-                              1 DZD = Rp{Math.round(dzdToIdrRate)}
-                            </span>
-                          </label>
-                          <div className="relative">
-                            <input 
-                              type="range" 
-                              min="100" 
-                              max="150" 
-                              step="0.5"
-                              value={dzdToIdrRate}
-                              onChange={(e) => setDzdToIdrRate(Number(e.target.value))}
-                              className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
-                            />
-                          </div>
+                      <div className="pt-4 mt-4 border-t border-slate-50">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Withholding & Deductions</p>
+                        <div className="space-y-3">
+                          <CurrencyInput 
+                            label="Pension (Year)"
+                            currency="IDR"
+                            value={pensionContribution}
+                            onChange={setPensionContribution}
+                            inputClassName="py-2.5"
+                          />
+                          <CurrencyInput 
+                            label="Domestic Tax Paid"
+                            currency="IDR"
+                            value={domesticTaxPaid}
+                            onChange={setDomesticTaxPaid}
+                            inputClassName="py-2.5"
+                          />
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Tax Results Display */}
-                  <TaxSummary 
-                    domesticIncomes={domesticIncomes}
-                    domesticTaxPaid={domesticTaxPaid}
-                    foreignIncomeDZD={foreignIncomeDZD}
-                    foreignTaxDZD={foreignTaxDZD}
-                    dzdToIdrRate={dzdToIdrRate}
-                    ptkpStatus={ptkpStatus}
-                    pensionContribution={pensionContribution}
-                    otherDeductions={otherDeductions}
-                  />
+                  {/* Middle: Foreign Income */}
+                  <div className="bg-indigo-600 p-6 rounded-[24px] text-white shadow-xl shadow-indigo-100 flex flex-col h-full relative">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-bold flex items-center gap-2">
+                        <Globe size={16} className="text-indigo-200" />
+                        Foreign Income (Annual)
+                      </h3>
+                      <button 
+                        onClick={fetchExchangeRate}
+                        className="p-1 px-2 bg-white/20 hover:bg-white/30 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1 transition-all"
+                        title="Sync latest market rates"
+                      >
+                        <RefreshCcw size={10} className={isFetchingRate ? 'animate-spin' : ''} />
+                        Sync Live
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-4 flex-1">
+                      <CurrencyInput 
+                        label="Salarie Imposable (DZD)"
+                        currency="DZD"
+                        value={foreignIncomeDZD}
+                        onChange={setForeignIncomeDZD}
+                        className="text-white"
+                        inputClassName="bg-white text-slate-900 border-transparent focus:border-white/30 py-2.5"
+                        labelClassName="text-indigo-200"
+                      />
+                      <CurrencyInput 
+                        label="Annual IRG Tax (DZD)"
+                        currency="DZD"
+                        value={foreignTaxDZD}
+                        onChange={setForeignTaxDZD}
+                        inputClassName="bg-white text-slate-900 border-transparent focus:border-white/30 py-2.5"
+                        labelClassName="text-indigo-200"
+                      />
+                      
+                      <div className="pt-4 mt-4 border-t border-white/10">
+                        <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-2 flex justify-between">
+                          DZD/IDR Rate
+                          <span className="text-white font-mono">{Math.round(dzdToIdrRate)}</span>
+                        </p>
+                        <input 
+                          type="range" 
+                          min="100" 
+                          max="150" 
+                          step="0.5"
+                          value={dzdToIdrRate}
+                          onChange={(e) => setDzdToIdrRate(Number(e.target.value))}
+                          className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: PTKP Status */}
+                  <div className="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex flex-col h-full">
+                    <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                      <Info size={16} className="text-indigo-500" />
+                      PTKP Status
+                    </h3>
+                    
+                    <div className="flex-1 flex flex-col justify-between">
+                      <div className="relative">
+                        <select 
+                          value={ptkpStatus} 
+                          onChange={(e) => setPtkpStatus(e.target.value)}
+                          className="w-full pl-4 pr-10 py-3 bg-slate-50 border-2 border-transparent rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                        >
+                          {Object.keys(ptkpMap).map(status => (
+                            <option key={status} value={status}>{status} — {f(ptkpMap[status])}</option>
+                          ))}
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                          <ChevronRight size={16} className="rotate-90" />
+                        </div>
+                      </div>
+
+                      <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <p className="text-[9px] font-bold text-slate-400 mb-2 uppercase tracking-wider">PTKP Info & Rules</p>
+                        <div className="space-y-2 text-[10px] text-slate-600 font-medium leading-relaxed">
+                          <p>• <span className="font-bold text-indigo-600">TK:</span> Tidak Kawin (Single)</p>
+                          <p>• <span className="font-bold text-indigo-600">K:</span> Kawin (Married)</p>
+                          <p>• <span className="font-bold text-indigo-600">Numbers (0-3):</span> Dependents</p>
+                          <div className="pt-2 border-t border-slate-200 flex flex-col gap-1">
+                            <span className="flex justify-between"><span>Base Self</span> <span>Rp 54.000.000</span></span>
+                            <span className="flex justify-between"><span>Marriage</span> <span>+Rp 4.500.000</span></span>
+                            <span className="flex justify-between"><span>Per Dependent</span> <span>+Rp 4.500.000</span></span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Bottom Row: Tax Results & Visualization */}
+                <TaxSummary 
+                  domesticIncomes={domesticIncomes}
+                  domesticTaxPaid={domesticTaxPaid}
+                  foreignIncomeDZD={foreignIncomeDZD}
+                  foreignTaxDZD={foreignTaxDZD}
+                  dzdToIdrRate={dzdToIdrRate}
+                  ptkpStatus={ptkpStatus}
+                  pensionContribution={pensionContribution}
+                  otherDeductions={otherDeductions}
+                />
               </div>
             </motion.div>
           )}
@@ -933,8 +931,8 @@ export default function App() {
       {/* Footer / Status Bar */}
       <footer className="px-4 md:px-10 py-6 bg-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] font-bold text-slate-400 mt-auto border-t border-slate-200">
         <div className="flex flex-wrap justify-center sm:justify-start gap-4 sm:gap-6 uppercase tracking-wider">
-          <span className="shrink-0">Engine V2.5.2</span>
-          <span className="shrink-0">Mode: {process.env.NODE_ENV === 'production' ? 'Production' : 'Dev'}</span>
+          <span className="shrink-0">Engine V2.6.0</span>
+          <span className="shrink-0">Source: {rateProvider}</span>
           <span className="text-indigo-400 shrink-0">Live Finance Sync</span>
         </div>
         <div className="flex items-center gap-2">
@@ -978,7 +976,7 @@ function FormulaItem({ label, formula }: { label: string, formula: string }) {
   );
 }
 
-function CurrencyInput({ value, onChange, currency, label, labelClassName = "", placeholder = "0.00", className = "" }: any) {
+function CurrencyInput({ value, onChange, currency, label, labelClassName = "", placeholder = "0.00", className = "", inputClassName = "" }: any) {
   const [isFocused, setIsFocused] = useState(false);
   const [inputValue, setInputValue] = useState(value === 0 || !value ? '' : String(value));
 
@@ -1046,7 +1044,7 @@ function CurrencyInput({ value, onChange, currency, label, labelClassName = "", 
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           onChange={handleChange}
-          className="w-full pl-14 pr-4 py-3 sm:py-3.5 bg-slate-50/50 border-2 border-transparent group-focus-within:border-indigo-500 group-focus-within:bg-white rounded-xl sm:rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all font-mono"
+          className={`w-full pl-14 pr-4 py-3 sm:py-3.5 bg-slate-50/50 border-2 border-transparent group-focus-within:border-indigo-500 group-focus-within:bg-white rounded-xl sm:rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all font-mono ${inputClassName}`}
           placeholder={placeholder}
         />
       </div>
@@ -1064,12 +1062,6 @@ function TaxSummary({
   pensionContribution,
   otherDeductions
 }: any) {
-  const ptkpMap: Record<string, number> = {
-    'TK/0': 54000000, 'TK/1': 58500000, 'TK/2': 63000000, 'TK/3': 67500000,
-    'K/0': 58500000, 'K/1': 63000000, 'K/2': 67500000, 'K/3': 72000000,
-    'K/I/0': 112500000
-  };
-  
   const brackets = [
     { label: '5%', min: 0, max: 60000000, rate: 0.05, color: '#10b981' },
     { label: '15%', min: 60000000, max: 250000000, rate: 0.15, color: '#3b82f6' },
@@ -1102,16 +1094,15 @@ function TaxSummary({
   };
 
   const results = useMemo(() => {
-    const annualDomestic = domesticIncomes.reduce((acc: number, curr: any) => acc + curr.amount, 0) * 12;
-    const annualForeignIncomeIDR = (foreignIncomeDZD * dzdToIdrRate) * 12;
-    const annualForeignTaxIDR = (foreignTaxDZD * dzdToIdrRate) * 12;
+    const annualDomestic = domesticIncomes.reduce((acc: number, curr: any) => acc + curr.amount, 0);
+    const annualForeignIncomeIDR = (foreignIncomeDZD * dzdToIdrRate);
+    const annualForeignTaxIDR = (foreignTaxDZD * dzdToIdrRate);
     
     const ptkpValue = ptkpMap[ptkpStatus] || 54000000;
     const annualGrossIncome = annualDomestic + annualForeignIncomeIDR;
     
-    // Deductions: Biaya Jabatan (5% max 6M/year) + Pension + Other
-    const biayaJabatan = Math.min(annualGrossIncome * 0.05, 6000000);
-    const totalDeductions = biayaJabatan + (pensionContribution * 12) + (otherDeductions * 12);
+    // Deductions: Pension + Other (Biaya Jabatan removed per request)
+    const totalDeductions = pensionContribution + otherDeductions;
     
     const pkp = Math.max(0, annualGrossIncome - totalDeductions - ptkpValue);
     
@@ -1122,7 +1113,7 @@ function TaxSummary({
     const finalKPLN = Math.min(annualForeignTaxIDR, maxCredit);
     
     // Total Credit = PPh 24 + Domestic witholding (Annual)
-    const totalCredit = finalKPLN + (domesticTaxPaid * 12);
+    const totalCredit = finalKPLN + domesticTaxPaid;
     const annualTaxPayable = Math.max(0, annualTaxDue - totalCredit);
     const monthlyTaxPayable = annualTaxPayable / 12;
     
@@ -1138,106 +1129,124 @@ function TaxSummary({
       monthlyTaxPayable,
       taxStatus,
       ptkpValue,
-      biayaJabatan,
       totalDeductions,
       bracketDetails,
       annualForeignTaxIDR
     };
   }, [domesticIncomes, foreignIncomeDZD, foreignTaxDZD, dzdToIdrRate, ptkpStatus, domesticTaxPaid, pensionContribution, otherDeductions]);
 
-  const f = (val: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
+  const activeBracketIndex = useMemo(() => {
+    if (results.bracketDetails.length === 0) return -1;
+    const lastActiveLabel = results.bracketDetails[results.bracketDetails.length - 1].label;
+    return brackets.findIndex(b => b.label === lastActiveLabel);
+  }, [results.bracketDetails]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="bg-slate-900 text-white p-8 rounded-[40px] shadow-xl relative overflow-hidden">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="bg-slate-900 text-white p-6 sm:p-8 rounded-[32px] sm:rounded-[40px] shadow-xl relative overflow-hidden h-fit">
         <div className="absolute top-0 right-0 p-8 opacity-10">
-          <ReceiptText size={120} />
+          <ReceiptText size={100} />
         </div>
         
         <div className="relative z-10 space-y-6">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px] mb-2">{results.taxStatus}</p>
-              <h4 className={`text-4xl font-black ${results.annualTaxPayable === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <p className="text-indigo-400 font-black uppercase tracking-[0.2em] text-[10px] mb-2">{results.taxStatus}</p>
+              <h4 className={`text-3xl sm:text-4xl font-black tracking-tight ${results.annualTaxPayable === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
                 {f(Math.abs(results.annualTaxPayable))}
               </h4>
-              <p className="text-xs text-slate-500 mt-1">Monthly Approx: <span className="text-white font-bold">{f(results.monthlyTaxPayable)}</span></p>
-            </div>
-            <div className="text-right">
-              <p className="text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px] mb-2">Annual Gross</p>
-              <p className="text-lg font-bold text-white">{f(results.annualGrossIncome)}</p>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="px-2 py-0.5 bg-white/10 rounded text-[10px] font-bold text-slate-400 uppercase tracking-wider">Monthly Breakdown</span>
+                <span className="text-sm font-black text-white">{f(results.monthlyTaxPayable)}</span>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 text-sm">
+          <div className="grid grid-cols-1 gap-2.5 text-xs sm:text-sm">
             <div className="flex justify-between border-b border-white/10 pb-2">
-              <span className="text-slate-400">Total Deductions (Jabatan+Others)</span>
+              <span className="text-slate-400">Annual Gross Income</span>
+              <span className="font-bold">{f(results.annualGrossIncome)}</span>
+            </div>
+            <div className="flex justify-between border-b border-white/10 pb-2">
+              <span className="text-slate-400">Total Deductions</span>
               <span className="font-bold text-red-400">-{f(results.totalDeductions)}</span>
             </div>
             <div className="flex justify-between border-b border-white/10 pb-2">
-              <span className="text-slate-400">Status PTKP ({ptkpStatus})</span>
+              <span className="text-slate-400">PTKP Status ({ptkpStatus})</span>
               <span className="font-bold text-red-400">-{f(results.ptkpValue)}</span>
             </div>
-            <div className="flex justify-between border-b border-white/10 pb-2 bg-white/5 px-2 py-1 rounded">
-              <span className="text-indigo-300 font-bold">Net PKP (Annual)</span>
+            <div className="flex justify-between border-b border-white/10 pb-2 bg-indigo-500/10 px-2 py-1.5 rounded">
+              <span className="text-indigo-300 font-bold">Taxable PKP (Annual)</span>
               <span className="font-black text-indigo-300">{f(results.pkp)}</span>
             </div>
             <div className="flex justify-between border-b border-white/10 pb-2 pt-2">
-              <span className="text-slate-400">Total PPh 21 Terutang</span>
-              <span className="font-bold">{f(results.annualTaxDue)}</span>
+              <span className="text-slate-400">Tax Due (PPh 21)</span>
+              <span className="font-bold italic">{f(results.annualTaxDue)}</span>
             </div>
-            <div className="flex justify-between border-b border-white/10 pb-2">
-              <span className="text-slate-400">Pasal 24 Credit (Overseas Tax)</span>
-              <span className="font-bold text-emerald-400">-{f(results.finalKPLN)}</span>
+            <div className="flex justify-between border-b border-white/10 pb-2 font-medium">
+              <span className="text-slate-400">Pasal 24 (Foreign Credit)</span>
+              <span className="text-emerald-400">-{f(results.finalKPLN)}</span>
             </div>
-            <div className="flex justify-between border-b border-white/10 pb-2 text-[10px] italic text-slate-500 pl-4">
-              <span>Actual IRG Tax Paid: {f(results.annualForeignTaxIDR)}</span>
-              <span>Prop. Limit: {f(results.maxCredit)}</span>
-            </div>
-            <div className="flex justify-between border-b border-white/10 pb-2">
-              <span className="text-slate-400">Indo Withholding Paid</span>
-              <span className="font-bold text-emerald-400">-{f(domesticTaxPaid * 12)}</span>
+            <div className="flex justify-between border-b border-white/10 pb-2 font-medium">
+              <span className="text-slate-400">Indo Tax Already Paid</span>
+              <span className="text-emerald-400">-{f(domesticTaxPaid)}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Progressive Bracket Visualization */}
-      <div className="bg-white p-5 sm:p-6 rounded-[32px] border border-slate-100 shadow-sm">
-        <h5 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+      <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm h-fit">
+        <h5 className="text-xs font-black text-slate-800 mb-5 flex items-center gap-2 uppercase tracking-widest">
           <TrendingUp size={16} className="text-indigo-500" />
-          Progressive Tax Brackets (HPP Law)
+          Tax Tier Status
         </h5>
         <div className="space-y-2.5">
           {brackets.map((bracket, idx) => {
             const detail = results.bracketDetails.find((d: any) => d.label === bracket.label);
             const isFilled = !!detail;
+            const isActiveTier = idx === activeBracketIndex;
             
             return (
-              <div key={idx} className={`relative p-2.5 sm:p-3.5 rounded-2xl border-2 transition-all ${isFilled ? 'border-indigo-100 bg-indigo-50/30' : 'border-slate-50 bg-slate-50/20 opacity-50'}`}>
+              <div 
+                key={idx} 
+                className={`relative p-2.5 sm:p-3.5 rounded-2xl border-2 transition-all duration-500 ${
+                  isActiveTier 
+                    ? 'border-indigo-500 bg-indigo-50/50 shadow-md scale-[1.02] z-10' 
+                    : isFilled 
+                      ? 'border-indigo-100 bg-indigo-50/20 opacity-80' 
+                      : 'border-slate-50 bg-slate-50/10 opacity-40 grayscale'
+                }`}
+              >
                 <div className="flex justify-between items-center mb-1.5">
                   <div className="flex items-center gap-2">
                     <span 
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black text-white" 
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black text-white ${isActiveTier ? 'animate-pulse' : ''}`} 
                       style={{ backgroundColor: bracket.color }}
                     >
                       {bracket.label}
                     </span>
-                    <p className="text-xs font-bold text-slate-700">
+                    <p className={`text-xs font-bold ${isActiveTier ? 'text-slate-900' : 'text-slate-700'}`}>
                       Tier {idx + 1}: {bracket.min === 0 ? 'Up to' : 'Above'} {f(bracket.min)}
                     </p>
                   </div>
-                  {isFilled && <span className="text-[10px] font-black text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full uppercase">Active</span>}
+                  {isActiveTier ? (
+                    <span className="text-[9px] font-black text-white bg-indigo-600 px-2.5 py-1 rounded-lg uppercase tracking-wider shadow-sm">
+                      Current Tier
+                    </span>
+                  ) : isFilled ? (
+                    <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tight">Utilized</span>
+                  ) : null}
                 </div>
                 {isFilled ? (
                   <div className="flex justify-between items-end">
                     <div>
                       <p className="text-[9px] text-slate-400 uppercase font-bold">Taxable Amount</p>
-                      <p className="text-xs font-mono font-bold text-slate-600">{f(detail.amount)}</p>
+                      <p className={`text-xs font-mono font-bold ${isActiveTier ? 'text-indigo-600' : 'text-slate-600'}`}>{f(detail.amount)}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-[9px] text-slate-400 uppercase font-bold">Tier Tax</p>
-                      <p className="text-xs font-mono font-black text-slate-900">+{f(detail.tax)}</p>
+                      <p className={`text-xs font-mono font-black ${isActiveTier ? 'text-indigo-700' : 'text-slate-900'}`}>+{f(detail.tax)}</p>
                     </div>
                   </div>
                 ) : (

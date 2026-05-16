@@ -63,7 +63,7 @@ export default function App() {
   const [rateProvider, setRateProvider] = useState<string>('Default');
 
   // Tax Calculator State
-  const [dzdToIdrRate, setDzdToIdrRate] = useState<number>(130.5); 
+  const [dzdToIdrRate, setDzdToIdrRate] = useState<number>(135); 
   const [ptkpStatus, setPtkpStatus] = useState<string>('TK/0');
   const [domesticIncomes, setDomesticIncomes] = useState<{ label: string, amount: number }[]>([
     { label: 'Gaji Pokok', amount: 0 }
@@ -381,13 +381,39 @@ export default function App() {
                   </h2>
                   
                   <div className="space-y-5 sm:space-y-6">
-                    <CurrencyInput 
-                      label={`Base Salary International (${currency})`}
-                      currency={currency}
-                      value={baseSalary}
-                      onChange={setBaseSalary}
-                      placeholder="0.00"
-                    />
+                    <div className="flex flex-col gap-4">
+                      <CurrencyInput 
+                        label={`Base Salary International (${currency})`}
+                        currency={currency}
+                        value={baseSalary}
+                        onChange={setBaseSalary}
+                        placeholder="0.00"
+                        className="flex-1"
+                      />
+                      
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-3">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">USD/IDR Exchange Rate</label>
+                          <button 
+                            onClick={fetchExchangeRate}
+                            className={`p-1 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1 transition-all ${isFetchingRate ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 shadow-sm border border-slate-100 h-6'}`}
+                          >
+                            <RefreshCcw size={10} className={isFetchingRate ? 'animate-spin' : ''} />
+                            Sync
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-bold text-slate-400">1 USD =</span>
+                          <input 
+                            type="number"
+                            value={exchangeRate}
+                            onChange={(e) => setExchangeRate(Number(e.target.value))}
+                            className="bg-white px-3 py-2 rounded-xl border-2 border-transparent focus:border-indigo-500 font-mono font-bold text-sm text-slate-700 outline-none w-full"
+                          />
+                          <span className="text-sm font-bold text-slate-400">IDR</span>
+                        </div>
+                      </div>
+                    </div>
 
                     <div className="space-y-6 pt-4 border-t border-slate-50">
                       <div className="group">
@@ -443,6 +469,60 @@ export default function App() {
                     <span className="px-3 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase whitespace-nowrap">Tax Exempt</span>
                   </div>
                 </div>
+
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-slate-900 p-6 rounded-[24px] text-white shadow-lg overflow-hidden relative"
+                >
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <TrendingUp size={60} />
+                  </div>
+                  <h3 className="text-sm font-black mb-4 flex items-center gap-2 uppercase tracking-widest text-indigo-400">
+                    <Globe size={16} />
+                    Quick Converter
+                  </h3>
+                  <div className="space-y-4 relative z-10">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase">Input USD</label>
+                        <div className="relative">
+                           <input 
+                            type="number"
+                            className="w-full bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-sm font-bold text-white outline-none focus:border-indigo-500"
+                            placeholder="0.00"
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              const idrOut = document.getElementById('conv-idr') as HTMLInputElement;
+                              const dzdOut = document.getElementById('conv-dzd') as HTMLInputElement;
+                              if (idrOut) idrOut.value = (val * exchangeRate).toLocaleString();
+                              if (dzdOut) dzdOut.value = (val * (exchangeRate / dzdToIdrRate)).toLocaleString();
+                            }}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500">$</span>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase">IDR Result</label>
+                        <input 
+                          id="conv-idr"
+                          readOnly
+                          className="w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-sm font-bold text-emerald-400 outline-none"
+                          placeholder="Results..."
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-500 uppercase">DZD Approximation</label>
+                      <input 
+                        id="conv-dzd"
+                        readOnly
+                        className="w-full bg-white/5 border border-white/5 rounded-xl px-3 py-2 text-sm font-bold text-amber-400 outline-none"
+                        placeholder="Results..."
+                      />
+                    </div>
+                  </div>
+                </motion.div>
 
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
@@ -894,16 +974,16 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                        <p className="text-[9px] font-bold text-slate-400 mb-2 uppercase tracking-wider">PTKP Info & Rules</p>
+                      <div className="mt-4 p-4 bg-indigo-50/30 rounded-xl border border-indigo-100">
+                        <p className="text-[9px] font-black text-indigo-500 mb-2 uppercase tracking-wider">PTKP Rules (Update 2024)</p>
                         <div className="space-y-2 text-[10px] text-slate-600 font-medium leading-relaxed">
-                          <p>• <span className="font-bold text-indigo-600">TK:</span> Tidak Kawin (Single)</p>
-                          <p>• <span className="font-bold text-indigo-600">K:</span> Kawin (Married)</p>
-                          <p>• <span className="font-bold text-indigo-600">Numbers (0-3):</span> Dependents</p>
-                          <div className="pt-2 border-t border-slate-200 flex flex-col gap-1">
-                            <span className="flex justify-between"><span>Base Self</span> <span>Rp 54.000.000</span></span>
-                            <span className="flex justify-between"><span>Marriage</span> <span>+Rp 4.500.000</span></span>
-                            <span className="flex justify-between"><span>Per Dependent</span> <span>+Rp 4.500.000</span></span>
+                          <p>• <span className="font-bold text-indigo-600">TK:</span> Tidak Kawin / Single</p>
+                          <p>• <span className="font-bold text-indigo-600">K:</span> Kawin / Married</p>
+                          <p>• <span className="font-bold text-indigo-600">Numbers:</span> Dependents (0-3)</p>
+                          <div className="pt-2 border-t border-indigo-100 flex flex-col gap-1.5 mt-1">
+                            <span className="flex justify-between items-center bg-white px-2 py-1 rounded"><span>Self Base</span> <span className="font-bold text-slate-800">Rp 54M</span></span>
+                            <span className="flex justify-between items-center bg-white px-2 py-1 rounded"><span>Marriage</span> <span className="font-bold text-slate-800">+Rp 4.5M</span></span>
+                            <span className="flex justify-between items-center bg-white px-2 py-1 rounded"><span>Dependent</span> <span className="font-bold text-slate-800">+Rp 4.5M</span></span>
                           </div>
                         </div>
                       </div>
@@ -1044,7 +1124,7 @@ function CurrencyInput({ value, onChange, currency, label, labelClassName = "", 
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           onChange={handleChange}
-          className={`w-full pl-14 pr-4 py-3 sm:py-3.5 bg-slate-50/50 border-2 border-transparent group-focus-within:border-indigo-500 group-focus-within:bg-white rounded-xl sm:rounded-2xl text-sm font-bold text-slate-700 outline-none transition-all font-mono ${inputClassName}`}
+          className={`w-full pl-14 pr-4 py-3 sm:py-3.5 bg-slate-50/50 border-2 border-transparent group-focus-within:border-indigo-500 group-focus-within:bg-white rounded-xl sm:rounded-2xl text-sm font-bold text-slate-900 outline-none transition-all font-mono ${inputClassName}`}
           placeholder={placeholder}
         />
       </div>

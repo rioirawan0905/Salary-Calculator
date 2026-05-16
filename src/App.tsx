@@ -45,6 +45,7 @@ export default function App() {
   const [travelDays, setTravelDays] = useState<number>(2);
   const [currency, setCurrency] = useState<Currency>('USD');
   const [exchangeRate, setExchangeRate] = useState<number>(16150);
+  const [lastUpdated, setLastUpdated] = useState<string>('Initializing');
   const [isFetchingRate, setIsFetchingRate] = useState(false);
   const [activeView, setActiveView] = useState<'salary' | 'tax'>('salary');
   const [activeTab, setActiveTab] = useState<'breakdown' | 'table' | 'history'>('breakdown');
@@ -71,28 +72,37 @@ export default function App() {
   useEffect(() => {
     fetchExchangeRate();
     fetchHistory();
+    
+    // Auto refresh every 5 minutes
+    const interval = setInterval(fetchExchangeRate, 300000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchExchangeRate = async () => {
     setIsFetchingRate(true);
-    console.log('Fetching exchange rate from proxy...');
     try {
       const response = await fetch('/api/latest');
       if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`);
+        throw new Error(`Server error: ${response.status}`);
       }
       const data = await response.json();
-      console.log('Raw rate data:', data);
       
-      if (data && data.rates && data.rates.IDR) {
-        const rate = data.rates.IDR;
-        console.log('Setting exchange rate to:', rate);
-        setExchangeRate(rate);
+      if (data && data.rates) {
+        if (data.rates.IDR) {
+          setExchangeRate(data.rates.IDR);
+        }
+        if (data.rates.DZD && data.rates.IDR) {
+          // Calculate DZD to IDR: (1 USD / DZD rate) * IDR rate = 1 DZD in IDR
+          const dzdInIdr = (1 / data.rates.DZD) * data.rates.IDR;
+          setDzdToIdrRate(dzdInIdr);
+        }
+        setLastUpdated(new Date().toLocaleTimeString());
       } else {
-        console.warn('Unexpected data format from exchange rate API:', data);
+        setLastUpdated('Data error');
       }
     } catch (error) {
       console.error('Failed to fetch exchange rate:', error);
+      setLastUpdated('Sync failed');
     } finally {
       setIsFetchingRate(false);
     }
@@ -299,12 +309,22 @@ export default function App() {
             <RefreshCcw size={16} className={isFetchingRate ? 'animate-spin' : ''} />
           </button>
 
-          <div className="hidden lg:flex items-center gap-4 border-l border-slate-100 pl-4">
+          <div className="hidden lg:flex items-center gap-4 border-l border-slate-100 pl-4 group/rate">
             <div className="text-right">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest whitespace-nowrap">Live Rate</p>
-              <p className="text-sm font-bold text-indigo-600 font-mono">1 USD = {new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2 }).format(exchangeRate)} IDR</p>
+              <div className="flex items-center justify-end gap-1.5 mb-0.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${isFetchingRate ? 'bg-amber-400 animate-pulse' : (lastUpdated !== 'Initializing' && lastUpdated !== 'Sync failed' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-slate-300')}`}></span>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.1em] whitespace-nowrap">Live Exchange</p>
+              </div>
+              <p className="text-sm font-bold text-indigo-600 font-mono flex items-center justify-end gap-1">
+                <span className="text-[10px] text-slate-300">1 USD =</span>
+                {new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2 }).format(exchangeRate)} 
+                <span className="text-[10px] text-slate-300">IDR</span>
+              </p>
+              <p className="text-[8px] text-slate-400 font-medium opacity-0 group-hover/rate:opacity-100 transition-opacity">Updated: {lastUpdated}</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-indigo-100 border-2 border-white shadow-sm ring-1 ring-slate-100"></div>
+            <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover/rate:bg-indigo-50 group-hover/rate:border-indigo-100 transition-all cursor-default">
+              <Globe size={18} className="text-slate-300 group-hover/rate:text-indigo-400 transition-colors" />
+            </div>
           </div>
         </div>
       </nav>
@@ -869,9 +889,12 @@ export default function App() {
                           onChange={setForeignTaxDZD}
                         />
                         <div className="pt-6 mt-2 border-t border-white/10">
-                          <label className="block text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-3 flex justify-between">
-                            Custom Exchange Rate
-                            <span className="text-white font-mono tracking-normal bg-white/20 px-2 py-0.5 rounded">1 DZD = Rp{dzdToIdrRate}</span>
+                          <label className="block text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-3 flex justify-between items-center">
+                            <span>DZD Rate ({lastUpdated !== 'Initializing' ? 'Sync Live' : 'Custom'})</span>
+                            <span className="text-white font-mono tracking-normal bg-white/20 px-2 py-0.5 rounded flex items-center gap-1.5">
+                              {lastUpdated !== 'Initializing' && lastUpdated !== 'Sync failed' && <span className="w-1 h-1 bg-emerald-400 rounded-full animate-pulse"></span>}
+                              1 DZD = Rp{Math.round(dzdToIdrRate)}
+                            </span>
                           </label>
                           <div className="relative">
                             <input 

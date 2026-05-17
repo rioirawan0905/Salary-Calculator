@@ -15,7 +15,8 @@ import {
   Table,
   PieChart as PieChartIcon,
   RefreshCcw,
-  Globe
+  Globe,
+  ArrowLeftRight
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -56,7 +57,7 @@ export default function App() {
   const [lastUpdated, setLastUpdated] = useState<string>('Initializing');
   const [isFetchingRate, setIsFetchingRate] = useState(false);
   const [activeView, setActiveView] = useState<'salary' | 'tax'>('salary');
-  const [activeTab, setActiveTab] = useState<'breakdown' | 'table' | 'history'>('breakdown');
+  const [activeTab, setActiveTab] = useState<'breakdown' | 'table' | 'history' | 'comparison'>('breakdown');
   const [historyPair, setHistoryPair] = useState<'USD/IDR' | 'DZD/IDR' | 'DZD/USD'>('USD/IDR');
   const [historicalData, setHistoricalData] = useState<HistoricalRate[]>([]);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
@@ -209,19 +210,62 @@ export default function App() {
     };
   };
 
+  const calculateOldForDays = (bs: number, fDays: number, tDays: number) => {
+    const dDays = fDays + tDays;
+    const baseAmount = bs;
+    
+    // Foreign Service: 15% x Base x (Duty/30)
+    const foreignServiceAllowance = 0.15 * bs * (dDays / 30);
+    
+    // Hardship: 50% x Base x (Duty/30)
+    const hardshipAllowance = 0.50 * bs * (dDays / 30);
+    
+    // Field Allowance: $60 x field days
+    // If currency is IDR, we use (60 * exchangeRate)
+    const fieldRate = currency === 'USD' ? 60 : 60 * exchangeRate;
+    const fieldAllowance = fieldRate * fDays;
+    
+    // Travel Allowance: $60 x travel days
+    const travelRate = currency === 'USD' ? 60 : 60 * exchangeRate;
+    const travelAllowance = travelRate * tDays;
+    
+    const total = baseAmount + foreignServiceAllowance + hardshipAllowance + fieldAllowance + travelAllowance;
+    
+    return {
+      baseAmount,
+      foreignServiceAllowance,
+      hardshipAllowance,
+      fieldAllowance,
+      travelAllowance,
+      total
+    };
+  };
+
   const calculations = useMemo(() => {
-    return calculateForDays(baseSalary, fieldDays, travelDays);
-  }, [baseSalary, fieldDays, travelDays]);
+    const newData = calculateForDays(baseSalary, fieldDays, travelDays);
+    const oldData = calculateOldForDays(baseSalary, fieldDays, travelDays);
+    return { new: newData, old: oldData };
+  }, [baseSalary, fieldDays, travelDays, currency, exchangeRate]);
 
   const displayCalculations = useMemo(() => {
+    const { new: n, old: o } = calculations;
     return {
-      baseAmount: calculations.baseAmount,
-      foreignServiceAllowance: calculations.foreignServiceAllowance,
-      hardshipAllowance: calculations.hardshipAllowance,
-      fieldAllowance: calculations.fieldAllowance,
-      travelAllowance: calculations.travelAllowance,
-      total: calculations.total,
-      allowancesTotal: calculations.total - calculations.baseAmount
+      new: {
+        ...n,
+        allowancesTotal: n.total - n.baseAmount
+      },
+      old: {
+        ...o,
+        allowancesTotal: o.total - o.baseAmount
+      },
+      diff: {
+        foreignService: n.foreignServiceAllowance - o.foreignServiceAllowance,
+        hardship: n.hardshipAllowance - o.hardshipAllowance,
+        field: n.fieldAllowance - o.fieldAllowance,
+        travel: n.travelAllowance - o.travelAllowance,
+        total: n.total - o.total,
+        allowances: (n.total - n.baseAmount) - (o.total - o.baseAmount)
+      }
     };
   }, [calculations]);
 
@@ -234,12 +278,12 @@ export default function App() {
   };
 
   const chartData = useMemo(() => [
-    { name: 'Base Salary', value: displayCalculations.baseAmount, color: '#6366f1' },
-    { name: 'Foreign Service Allowance', value: displayCalculations.foreignServiceAllowance, color: '#818cf8' },
-    { name: 'Hardship Allowance', value: displayCalculations.hardshipAllowance, color: '#fbbf24' },
-    { name: 'Field Allowance', value: displayCalculations.fieldAllowance, color: '#10b981' },
-    { name: 'Travel Allowance', value: displayCalculations.travelAllowance, color: '#d946ef' },
-  ].filter(item => item.value > 0), [displayCalculations]);
+    { name: 'Base Salary', value: displayCalculations.new.baseAmount, color: '#6366f1' },
+    { name: 'Foreign Service Allowance', value: displayCalculations.new.foreignServiceAllowance, color: '#818cf8' },
+    { name: 'Hardship Allowance', value: displayCalculations.new.hardshipAllowance, color: '#fbbf24' },
+    { name: 'Field Allowance', value: displayCalculations.new.fieldAllowance, color: '#10b981' },
+    { name: 'Travel Allowance', value: displayCalculations.new.travelAllowance, color: '#d946ef' },
+  ].filter(item => item.value > 0), [displayCalculations.new]);
 
   const tableData = useMemo(() => {
     const data = [];
@@ -408,7 +452,7 @@ export default function App() {
                             type="number"
                             value={exchangeRate}
                             onChange={(e) => setExchangeRate(Number(e.target.value))}
-                            className="bg-white px-3 py-2 rounded-xl border-2 border-transparent focus:border-indigo-500 font-mono font-bold text-sm text-slate-700 outline-none w-full"
+                            className="bg-white px-3 py-2 rounded-xl border-2 border-transparent focus:border-indigo-500 font-mono font-bold text-sm text-slate-900 outline-none w-full"
                           />
                           <span className="text-sm font-bold text-slate-400">IDR</span>
                         </div>
@@ -565,23 +609,30 @@ export default function App() {
                   <div className="absolute -right-20 -top-20 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
                   <div className="absolute -left-10 bottom-0 w-40 h-40 bg-fuchsia-400/20 rounded-full blur-2xl"></div>
                   
-                  <p className="text-[10px] sm:text-sm font-bold uppercase tracking-[0.2em] sm:tracking-[0.3em] mb-2 sm:mb-4 opacity-80 relative z-10 text-center sm:text-left">Estimated Monthly Payout (Nett)</p>
+                  <p className="text-[10px] sm:text-sm font-bold uppercase tracking-[0.2em] sm:tracking-[0.3em] mb-2 sm:mb-4 opacity-80 relative z-10 text-center sm:text-left flex items-center justify-center sm:justify-start gap-3">
+                    Estimated Monthly Payout (Nett)
+                    {displayCalculations.diff.total !== 0 && (
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${displayCalculations.diff.total > 0 ? 'bg-emerald-400 text-emerald-950' : 'bg-red-400 text-red-950'}`}>
+                        {displayCalculations.diff.total > 0 ? '+' : ''}{displayCalculations.diff.total.toFixed(0)} vs Old
+                      </span>
+                    )}
+                  </p>
                   <div className="flex flex-col sm:flex-row items-center sm:items-baseline gap-1 sm:gap-2 relative z-10 overflow-hidden text-center sm:text-left">
                     <span className="text-lg md:text-2xl font-light opacity-80">{currency}</span>
                     <h3 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tighter truncate leading-tight py-1 sm:py-2">
-                      {Math.floor(displayCalculations.total).toLocaleString()}
-                      <span className="text-lg md:text-3xl opacity-60">.{(displayCalculations.total % 1).toFixed(2).split('.')[1]}</span>
+                      {Math.floor(displayCalculations.new.total).toLocaleString()}
+                      <span className="text-lg md:text-3xl opacity-60">.{(displayCalculations.new.total % 1).toFixed(2).split('.')[1]}</span>
                     </h3>
                   </div>
                   
                   <div className="mt-8 sm:mt-12 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 relative z-10">
                     <div className="bg-white/10 backdrop-blur-md p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 text-center sm:text-left">
                       <p className="text-[9px] sm:text-[10px] font-bold uppercase opacity-60 mb-0.5 sm:mb-1 tracking-wider">Fixed Monthly Base</p>
-                      <p className="text-lg sm:text-xl md:text-2xl font-bold font-mono truncate">{formatValue(displayCalculations.baseAmount)}</p>
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold font-mono truncate">{formatValue(displayCalculations.new.baseAmount)}</p>
                     </div>
                     <div className="bg-white/10 backdrop-blur-md p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 text-center sm:text-left">
                       <p className="text-[9px] sm:text-[10px] font-bold uppercase opacity-60 mb-0.5 sm:mb-1 tracking-wider">Total Allowances</p>
-                      <p className="text-lg sm:text-xl md:text-2xl font-bold font-mono truncate">{formatValue(displayCalculations.allowancesTotal)}</p>
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold font-mono truncate">{formatValue(displayCalculations.new.allowancesTotal)}</p>
                     </div>
                   </div>
                   <p className="mt-6 sm:mt-8 text-[9px] sm:text-[10px] italic opacity-70 relative z-10 text-center sm:text-left">
@@ -599,6 +650,13 @@ export default function App() {
                       >
                         <PieChartIcon size={16} />
                         Breakdown
+                      </button>
+                      <button 
+                        onClick={() => setActiveTab('comparison')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'comparison' ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        <ArrowLeftRight size={16} />
+                        Side-by-Side
                       </button>
                       <button 
                         onClick={() => setActiveTab('table')}
@@ -677,11 +735,63 @@ export default function App() {
                           </div>
 
                       <div className="space-y-4 sm:pt-2">
-                        <AllowanceChip label="Foreign Service" value={displayCalculations.foreignServiceAllowance} color="indigo" formatValue={formatValue} percent={15} />
-                        <AllowanceChip label="Hardship" value={displayCalculations.hardshipAllowance} color="amber" formatValue={formatValue} percent={55} />
-                        <AllowanceChip label="Field (4%)" value={displayCalculations.fieldAllowance} color="emerald" formatValue={formatValue} percent={4} />
-                        <AllowanceChip label="Travel" value={displayCalculations.travelAllowance} color="fuchsia" formatValue={formatValue} percent={4} />
+                        <AllowanceChip label="Foreign Service" value={displayCalculations.new.foreignServiceAllowance} color="indigo" formatValue={formatValue} percent={15} />
+                        <AllowanceChip label="Hardship" value={displayCalculations.new.hardshipAllowance} color="amber" formatValue={formatValue} percent={55} />
+                        <AllowanceChip label="Field (4%)" value={displayCalculations.new.fieldAllowance} color="emerald" formatValue={formatValue} percent={4} />
+                        <AllowanceChip label="Travel" value={displayCalculations.new.travelAllowance} color="fuchsia" formatValue={formatValue} percent={4} />
                       </div>
+                        </motion.div>
+                      ) : activeTab === 'comparison' ? (
+                        <motion.div
+                          key="comparison"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="space-y-6"
+                        >
+                          <div className="grid grid-cols-1 gap-4">
+                            <ComparisonRow 
+                              label="Foreign Service (15%)" 
+                              newVal={displayCalculations.new.foreignServiceAllowance} 
+                              oldVal={displayCalculations.old.foreignServiceAllowance} 
+                              diff={displayCalculations.diff.foreignService}
+                              formatValue={formatValue}
+                            />
+                            <ComparisonRow 
+                              label="Hardship Allowance" 
+                              newVal={displayCalculations.new.hardshipAllowance} 
+                              oldVal={displayCalculations.old.hardshipAllowance} 
+                              diff={displayCalculations.diff.hardship}
+                              formatValue={formatValue}
+                              subLabel="New: 55% vs Old: 50%"
+                            />
+                            <ComparisonRow 
+                              label="Field Allowance" 
+                              newVal={displayCalculations.new.fieldAllowance} 
+                              oldVal={displayCalculations.old.fieldAllowance} 
+                              diff={displayCalculations.diff.field}
+                              formatValue={formatValue}
+                              subLabel="New: 4% Base vs Old: $60 Fixed"
+                            />
+                            <ComparisonRow 
+                              label="Travel Allowance" 
+                              newVal={displayCalculations.new.travelAllowance} 
+                              oldVal={displayCalculations.old.travelAllowance} 
+                              diff={displayCalculations.diff.travel}
+                              formatValue={formatValue}
+                              subLabel="New: 4% Base vs Old: $60 Fixed"
+                            />
+                            <div className="pt-4 border-t border-slate-100">
+                              <ComparisonRow 
+                                label="Total Allowances" 
+                                newVal={displayCalculations.new.allowancesTotal} 
+                                oldVal={displayCalculations.old.allowancesTotal} 
+                                diff={displayCalculations.diff.allowances}
+                                formatValue={formatValue}
+                                isTotal
+                              />
+                            </div>
+                          </div>
                         </motion.div>
                       ) : activeTab === 'table' ? (
                         <motion.div 
@@ -848,7 +958,7 @@ export default function App() {
                               newIncomes[idx].label = e.target.value;
                               setDomesticIncomes(newIncomes);
                             }}
-                            className="w-full px-3 py-2 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl text-xs font-medium outline-none transition-all"
+                            className="w-full px-3 py-2 bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-xl text-xs font-bold text-slate-900 outline-none transition-all"
                             placeholder="Label (e.g. Gaji)"
                           />
                           <div className="flex gap-2 items-center">
@@ -1020,6 +1130,35 @@ export default function App() {
           <span className="uppercase tracking-wider">Salary & Tax Calculator © 2026</span>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function ComparisonRow({ label, newVal, oldVal, diff, formatValue, subLabel, isTotal }: any) {
+  return (
+    <div className={`p-4 rounded-2xl border transition-all ${isTotal ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg' : 'bg-white border-slate-100 hover:border-indigo-100 shadow-sm'}`}>
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+        <div>
+          <h4 className={`text-xs font-black uppercase tracking-tight ${isTotal ? 'text-indigo-100' : 'text-slate-800'}`}>{label}</h4>
+          {subLabel && <p className={`text-[10px] font-medium opacity-60`}>{subLabel}</p>}
+        </div>
+        <div className="flex items-center gap-4 sm:gap-8">
+          <div className="text-right">
+            <p className={`text-[8px] font-bold uppercase opacity-50`}>Old</p>
+            <p className={`text-xs font-bold font-mono ${isTotal ? 'text-white' : 'text-slate-400'}`}>{formatValue(oldVal)}</p>
+          </div>
+          <div className="text-right">
+            <p className={`text-[8px] font-bold uppercase opacity-50`}>New</p>
+            <p className={`text-sm font-black font-mono`}>{formatValue(newVal)}</p>
+          </div>
+          <div className={`min-w-[80px] text-right px-3 py-1 rounded-lg ${diff > 0 ? (isTotal ? 'bg-emerald-400/20 text-emerald-300' : 'bg-emerald-50 text-emerald-600') : diff < 0 ? (isTotal ? 'bg-red-400/20 text-red-300' : 'bg-red-50 text-red-600') : (isTotal ? 'text-white/40' : 'text-slate-300')}`}>
+            <p className={`text-[8px] font-bold uppercase opacity-50 mb-0.5`}>Diff</p>
+            <p className="text-xs font-black font-mono">
+              {diff > 0 ? '+' : ''}{formatValue(diff)}
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

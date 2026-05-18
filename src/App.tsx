@@ -56,7 +56,7 @@ export default function App() {
   const [exchangeRate, setExchangeRate] = useState<number>(17522);
   const [lastUpdated, setLastUpdated] = useState<string>('Initializing');
   const [isFetchingRate, setIsFetchingRate] = useState(false);
-  const [activeView, setActiveView] = useState<'salary' | 'tax'>('salary');
+  const [activeView, setActiveView] = useState<'perdin' | 'salary' | 'tax'>('salary');
   const [activeTab, setActiveTab] = useState<'breakdown' | 'table' | 'history' | 'comparison'>('breakdown');
   const [historyPair, setHistoryPair] = useState<'USD/IDR' | 'DZD/IDR' | 'DZD/USD'>('USD/IDR');
   const [historicalData, setHistoricalData] = useState<HistoricalRate[]>([]);
@@ -74,6 +74,53 @@ export default function App() {
   const [foreignTaxDZD, setForeignTaxDZD] = useState<number>(0);
   const [pensionContribution, setPensionContribution] = useState<number>(0); // Monthly iuran pensiun/JHT
   const [otherDeductions, setOtherDeductions] = useState<number>(0); // Monthly general deductions
+
+  // Perjalanan Dinas State
+  const [perdinDates, setPerdinDates] = useState({
+    departureCGK: '',
+    arrivalALG: '',
+    returnALG: '',
+    returnCGK: ''
+  });
+  const [perdinDurations, setPerdinDurations] = useState({
+    inHassi: 0,
+    inMLN: 0
+  });
+  const [perdinExchangeRate, setPerdinExchangeRate] = useState<number>(17600);
+
+  // Auto-calculate Perdin total duration from dates
+  const perdinTotalDays = useMemo(() => {
+    if (!perdinDates.departureCGK || !perdinDates.returnCGK) return 0;
+    const start = new Date(perdinDates.departureCGK);
+    const end = new Date(perdinDates.returnCGK);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // inclusive
+  }, [perdinDates.departureCGK, perdinDates.returnCGK]);
+
+  // Derive Algeria days as remainder: (Total - 4) - Hassi - MLN
+  const perdinInAlgeria = useMemo(() => {
+    return Math.max(0, (perdinTotalDays - 4) - perdinDurations.inHassi - perdinDurations.inMLN);
+  }, [perdinTotalDays, perdinDurations.inHassi, perdinDurations.inMLN]);
+
+  const perdinCalculations = useMemo(() => {
+    const rate = perdinExchangeRate;
+    const commonCompDays = Math.max(0, perdinTotalDays - 4);
+    
+    const items = [
+      { label: 'Transport Bandara Jakarta', usd: 600000 / rate, idr: 600000, desc: 'Fixed/Flat Rate' },
+      { label: 'Transit', usd: 80, idr: 80 * rate, desc: 'Fixed/Flat USD' },
+      { label: 'Hari Perjalanan (Ke/Dari)', usd: 800, idr: 800 * rate, desc: '$200 / day (4 days)' },
+      { label: 'Kompensasi Algeria', usd: perdinInAlgeria * 40, idr: perdinInAlgeria * 40 * rate, desc: `$40 x ${perdinInAlgeria} days` },
+      { label: 'Kompensasi Hassi', usd: perdinDurations.inHassi * 50, idr: perdinDurations.inHassi * 50 * rate, desc: `$50 x ${perdinDurations.inHassi} days` },
+      { label: 'Kompensasi MLN', usd: perdinDurations.inMLN * 60, idr: perdinDurations.inMLN * 60 * rate, desc: `$60 x ${perdinDurations.inMLN} days` },
+      { label: 'Uang Kompensasi Umum', usd: commonCompDays * 60, idr: commonCompDays * 60 * rate, desc: `$60 x ${commonCompDays} days (Total - 4)` }
+    ];
+
+    const totalUsd = items.reduce((sum, item) => sum + item.usd, 0);
+    const totalIdr = items.reduce((sum, item) => sum + item.idr, 0);
+
+    return { items, totalUsd, totalIdr };
+  }, [perdinDurations, perdinExchangeRate, perdinTotalDays, perdinInAlgeria]);
 
   // On Duty Days is now computed: fieldDays + travelDays
   const onDutyDays = useMemo(() => fieldDays + travelDays, [fieldDays, travelDays]);
@@ -386,6 +433,13 @@ export default function App() {
       {/* Main Tab Switcher */}
       <div className="bg-white border-b border-slate-100 px-4 md:px-10 flex justify-center gap-4 md:gap-8 overflow-x-auto no-scrollbar">
         <button 
+          onClick={() => setActiveView('perdin')}
+          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'perdin' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+        >
+          <Plane size={16} />
+          Perjalanan Dinas
+        </button>
+        <button 
           onClick={() => setActiveView('salary')}
           className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'salary' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
         >
@@ -404,7 +458,187 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-10 max-w-7xl mx-auto w-full mb-12">
         <AnimatePresence mode="wait">
-          {activeView === 'salary' ? (
+          {activeView === 'perdin' ? (
+            <motion.div
+              key="perdin-view"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+            >
+              {/* Perdin Inputs */}
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-white p-6 sm:p-8 rounded-[32px] shadow-sm border border-slate-100">
+                  <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <Calendar size={20} className="text-indigo-500" />
+                    Timeline & Durasi
+                  </h2>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Berangkat (CGK)</label>
+                      <input 
+                        type="date" 
+                        value={perdinDates.departureCGK}
+                        onChange={(e) => setPerdinDates({...perdinDates, departureCGK: e.target.value})}
+                        className="w-full bg-slate-50 px-4 py-2.5 rounded-xl border-2 border-transparent focus:border-indigo-500 font-bold text-sm outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tiba Algeria</label>
+                      <input 
+                        type="date" 
+                        value={perdinDates.arrivalALG}
+                        onChange={(e) => setPerdinDates({...perdinDates, arrivalALG: e.target.value})}
+                        className="w-full bg-slate-50 px-4 py-2.5 rounded-xl border-2 border-transparent focus:border-indigo-500 font-bold text-sm outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pulang (ALG-DOH)</label>
+                      <input 
+                        type="date" 
+                        value={perdinDates.returnALG}
+                        onChange={(e) => setPerdinDates({...perdinDates, returnALG: e.target.value})}
+                        className="w-full bg-slate-50 px-4 py-2.5 rounded-xl border-2 border-transparent focus:border-indigo-500 font-bold text-sm outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pulang (DOH-CGK)</label>
+                      <input 
+                        type="date" 
+                        value={perdinDates.returnCGK}
+                        onChange={(e) => setPerdinDates({...perdinDates, returnCGK: e.target.value})}
+                        className="w-full bg-slate-50 px-4 py-2.5 rounded-xl border-2 border-transparent focus:border-indigo-500 font-bold text-sm outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-8 p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex justify-between items-center">
+                    <div>
+                      <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest leading-none mb-1">Total Durasi Perjalanan</p>
+                      <p className="text-2xl font-black text-indigo-700">{perdinTotalDays} Hari</p>
+                    </div>
+                    <Plane className="text-indigo-200" size={32} />
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 sm:p-8 rounded-[32px] shadow-sm border border-slate-100">
+                  <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <MapPin size={20} className="text-emerald-500" />
+                    Detail Lokasi (Days)
+                  </h2>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-full">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Algeria (Auto-Balance)</label>
+                        <div className="w-full bg-slate-50 px-4 py-2.5 rounded-xl border-2 border-slate-100 font-black text-indigo-600 text-sm flex justify-between items-center">
+                          <span>{perdinInAlgeria} Hari</span>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Remains from Total - 4</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Hassi</label>
+                        <input 
+                          type="number" 
+                          min="0"
+                          max={Math.max(0, (perdinTotalDays - 4) - perdinDurations.inMLN)}
+                          value={perdinDurations.inHassi}
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value));
+                            const limit = Math.max(0, (perdinTotalDays - 4) - perdinDurations.inMLN);
+                            setPerdinDurations({...perdinDurations, inHassi: Math.min(val, limit)});
+                          }}
+                          className="w-full bg-slate-50 px-4 py-2.5 rounded-xl border-2 border-transparent focus:border-indigo-500 font-bold text-sm outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">MLN</label>
+                        <input 
+                          type="number" 
+                          min="0"
+                          max={Math.max(0, (perdinTotalDays - 4) - perdinDurations.inHassi)}
+                          value={perdinDurations.inMLN}
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value));
+                            const limit = Math.max(0, (perdinTotalDays - 4) - perdinDurations.inHassi);
+                            setPerdinDurations({...perdinDurations, inMLN: Math.min(val, limit)});
+                          }}
+                          className="w-full bg-slate-50 px-4 py-2.5 rounded-xl border-2 border-transparent focus:border-indigo-500 font-bold text-sm outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 p-6 rounded-[32px] text-white">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Kurs Override (1 USD to IDR)</label>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg font-bold text-slate-400">Rp</span>
+                    <input 
+                      type="number"
+                      value={perdinExchangeRate}
+                      onChange={(e) => setPerdinExchangeRate(Number(e.target.value))}
+                      className="bg-white/10 w-full px-4 py-2 rounded-xl border border-white/10 font-bold text-lg outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Perdin Results */}
+              <div className="lg:col-span-7 flex flex-col gap-6">
+                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-[32px] p-8 md:p-10 text-white shadow-2xl shadow-emerald-100 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-8 opacity-10">
+                    <DollarSign size={100} />
+                  </div>
+                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.3em] mb-4 opacity-80 relative z-10">Total Kompensasi Perjalanan</p>
+                  <div className="flex items-baseline gap-3 relative z-10">
+                    <span className="text-xl font-light opacity-80">IDR</span>
+                    <h3 className="text-5xl md:text-7xl font-black tracking-tighter truncate">
+                      {Math.floor(perdinCalculations.totalIdr).toLocaleString('id-ID')}
+                    </h3>
+                  </div>
+                  <div className="mt-8 pt-8 border-t border-white/20 relative z-10 flex justify-between items-center text-emerald-50">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase opacity-60">Total in USD</p>
+                      <p className="text-2xl font-black">{perdinCalculations.totalUsd.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold uppercase opacity-60">Exchange Rate</p>
+                      <p className="text-lg font-bold italic">1 USD = Rp {perdinExchangeRate.toLocaleString('id-ID')}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+                  <div className="p-6 md:p-8 bg-slate-50/50 border-b border-slate-100">
+                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">Rincian Kompensasi</h3>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    {perdinCalculations.items.map((item, idx) => (
+                      <div key={idx} className="p-4 md:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50 transition-colors">
+                        <div>
+                          <p className="text-sm font-black text-slate-800 leading-none mb-1">{item.label}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{item.desc}</p>
+                        </div>
+                        <div className="flex gap-4 md:gap-8 w-full sm:w-auto">
+                          <div className="text-left sm:text-right flex-1 sm:flex-initial">
+                            <p className="text-[8px] font-bold text-slate-400 uppercase">USD</p>
+                            <p className="text-xs font-bold text-slate-600">${item.usd.toFixed(2)}</p>
+                          </div>
+                          <div className="text-right flex-1 sm:flex-initial">
+                            <p className="text-[8px] font-bold text-slate-400 uppercase">IDR</p>
+                            <p className="text-sm font-black text-indigo-600">Rp {item.idr.toLocaleString('id-ID')}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ) : activeView === 'salary' ? (
             <motion.div 
               key="salary-view"
               initial={{ opacity: 0, scale: 0.98 }}

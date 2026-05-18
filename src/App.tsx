@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, ChangeEvent } from 'react';
+import { useState, useMemo, useEffect, ChangeEvent, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calculator, 
@@ -56,7 +56,7 @@ export default function App() {
   const [exchangeRate, setExchangeRate] = useState<number>(17522);
   const [lastUpdated, setLastUpdated] = useState<string>('Initializing');
   const [isFetchingRate, setIsFetchingRate] = useState(false);
-  const [activeView, setActiveView] = useState<'perdin' | 'salary' | 'tax'>('salary');
+  const [activeView, setActiveView] = useState<'perdin' | 'salary' | 'tax' | 'variable' | 'total'>('salary');
   const [activeTab, setActiveTab] = useState<'breakdown' | 'table' | 'history' | 'comparison'>('breakdown');
   const [historyPair, setHistoryPair] = useState<'USD/IDR' | 'DZD/IDR' | 'DZD/USD'>('USD/IDR');
   const [historicalData, setHistoricalData] = useState<HistoricalRate[]>([]);
@@ -74,6 +74,9 @@ export default function App() {
   const [foreignTaxDZD, setForeignTaxDZD] = useState<number>(0);
   const [pensionContribution, setPensionContribution] = useState<number>(0); // Monthly iuran pensiun/JHT
   const [otherDeductions, setOtherDeductions] = useState<number>(0); // Monthly general deductions
+  const [pullVariablePay, setPullVariablePay] = useState(false);
+  const [pullSalaryForAlgerian, setPullSalaryForAlgerian] = useState(false);
+  const [autoCalcAlgerianTax, setAutoCalcAlgerianTax] = useState(false);
 
   // Perjalanan Dinas State
   const [perdinDates, setPerdinDates] = useState({
@@ -87,6 +90,15 @@ export default function App() {
     inMLN: 0
   });
   const [perdinExchangeRate, setPerdinExchangeRate] = useState<number>(17600);
+  const [includeTransport, setIncludeTransport] = useState(false);
+  const [includeTransit, setIncludeTransit] = useState(false);
+  const [includeTravelDays, setIncludeTravelDays] = useState(false);
+
+  // Variable Pay State
+  const [basicSalaryHomeNett, setBasicSalaryHomeNett] = useState<number>(0);
+  const [peopleReviewScore, setPeopleReviewScore] = useState<number>(4);
+  const [kpiFungsi, setKpiFungsi] = useState<number>(100);
+  const [poolBonus, setPoolBonus] = useState<number>(3.18);
 
   // Auto-calculate Perdin total duration from dates
   const perdinTotalDays = useMemo(() => {
@@ -106,21 +118,58 @@ export default function App() {
     const rate = perdinExchangeRate;
     const commonCompDays = Math.max(0, perdinTotalDays - 4);
     
-    const items = [
-      { label: 'Transport Bandara Jakarta', usd: 600000 / rate, idr: 600000, desc: 'Fixed/Flat Rate' },
-      { label: 'Transit', usd: 80, idr: 80 * rate, desc: 'Fixed/Flat USD' },
-      { label: 'Hari Perjalanan (Ke/Dari)', usd: 800, idr: 800 * rate, desc: '$200 / day (4 days)' },
-      { label: 'Kompensasi Algeria', usd: perdinInAlgeria * 40, idr: perdinInAlgeria * 40 * rate, desc: `$40 x ${perdinInAlgeria} days` },
-      { label: 'Kompensasi Hassi', usd: perdinDurations.inHassi * 50, idr: perdinDurations.inHassi * 50 * rate, desc: `$50 x ${perdinDurations.inHassi} days` },
-      { label: 'Kompensasi MLN', usd: perdinDurations.inMLN * 60, idr: perdinDurations.inMLN * 60 * rate, desc: `$60 x ${perdinDurations.inMLN} days` },
-      { label: 'Uang Kompensasi Umum', usd: commonCompDays * 60, idr: commonCompDays * 60 * rate, desc: `$60 x ${commonCompDays} days (Total - 4)` }
-    ];
+    const items = [];
+    
+    if (includeTransport) {
+      items.push({ label: 'Transport Bandara Jakarta', usd: 600000 / rate, idr: 600000, desc: 'Fixed/Flat Rate' });
+    }
+    
+    if (includeTransit) {
+      items.push({ label: 'Transit', usd: 80, idr: 80 * rate, desc: 'Fixed/Flat USD' });
+    }
+    
+    if (includeTravelDays) {
+      items.push({ label: 'Hari Perjalanan (Ke/Dari)', usd: 800, idr: 800 * rate, desc: '$200 / day (4 days)' });
+    }
+
+    // Always include these but they depend on durations/days which might be 0
+    if (perdinInAlgeria > 0) {
+      items.push({ label: 'Kompensasi Algeria', usd: perdinInAlgeria * 40, idr: perdinInAlgeria * 40 * rate, desc: `$40 x ${perdinInAlgeria} days` });
+    }
+    if (perdinDurations.inHassi > 0) {
+      items.push({ label: 'Kompensasi Hassi', usd: perdinDurations.inHassi * 50, idr: perdinDurations.inHassi * 50 * rate, desc: `$50 x ${perdinDurations.inHassi} days` });
+    }
+    if (perdinDurations.inMLN > 0) {
+      items.push({ label: 'Kompensasi MLN', usd: perdinDurations.inMLN * 60, idr: perdinDurations.inMLN * 60 * rate, desc: `$60 x ${perdinDurations.inMLN} days` });
+    }
+    if (commonCompDays > 0) {
+      items.push({ label: 'Uang Kompensasi Umum', usd: commonCompDays * 60, idr: commonCompDays * 60 * rate, desc: `$60 x ${commonCompDays} days (Total - 4)` });
+    }
 
     const totalUsd = items.reduce((sum, item) => sum + item.usd, 0);
     const totalIdr = items.reduce((sum, item) => sum + item.idr, 0);
 
     return { items, totalUsd, totalIdr };
-  }, [perdinDurations, perdinExchangeRate, perdinTotalDays, perdinInAlgeria]);
+  }, [perdinDurations, perdinExchangeRate, perdinTotalDays, perdinInAlgeria, includeTransport, includeTransit, includeTravelDays]);
+
+  // Variable Pay Logic
+  const koefisienSMK = useMemo(() => {
+    if (peopleReviewScore >= 1 && peopleReviewScore <= 3) return 0;
+    if (peopleReviewScore === 4) return 1;
+    if (peopleReviewScore === 5) return 1.1;
+    if (peopleReviewScore === 6) return 1.2;
+    if (peopleReviewScore >= 7 && peopleReviewScore <= 8) return 1.325;
+    return 0;
+  }, [peopleReviewScore]);
+
+  const variablePayCalc = useMemo(() => {
+    const istirahatTahunan = 2 * basicSalaryHomeNett;
+    const thrk = 2 * basicSalaryHomeNett;
+    const insentif = ((0.55 * (kpiFungsi / 100)) + (0.45 * koefisienSMK)) * 6 * basicSalaryHomeNett;
+    const bonus = poolBonus * basicSalaryHomeNett * koefisienSMK;
+    const total = istirahatTahunan + thrk + insentif + bonus;
+    return { istirahatTahunan, thrk, insentif, bonus, total };
+  }, [basicSalaryHomeNett, kpiFungsi, koefisienSMK, poolBonus]);
 
   // On Duty Days is now computed: fieldDays + travelDays
   const onDutyDays = useMemo(() => fieldDays + travelDays, [fieldDays, travelDays]);
@@ -316,6 +365,28 @@ export default function App() {
     };
   }, [calculations]);
 
+  // Total Annual Pay calculation
+  const totalAnnualPay = useMemo(() => {
+    const monthlyTotal = displayCalculations.new.total;
+    // monthlyTotal is already in the selected 'currency' because calculations uses it
+    
+    // Perdin and Variable Pay are calculated in IDR
+    const salaryAnnual = monthlyTotal * 12;
+    const perdinAnnual = currency === 'IDR' ? perdinCalculations.totalIdr : perdinCalculations.totalIdr / exchangeRate;
+    const variablePayAnnual = currency === 'IDR' ? variablePayCalc.total : variablePayCalc.total / exchangeRate;
+    
+    // We need IDR version for tax calculations
+    const salaryAnnualIdr = currency === 'IDR' ? salaryAnnual : salaryAnnual * exchangeRate;
+    
+    return {
+      salaryAnnual,
+      salaryAnnualIdr,
+      perdinAnnual,
+      variablePayAnnual,
+      grandTotal: salaryAnnual + perdinAnnual + variablePayAnnual
+    };
+  }, [displayCalculations, perdinCalculations, variablePayCalc, currency, exchangeRate]);
+
   const formatValue = (amount: number) => {
     return new Intl.NumberFormat(currency === 'IDR' ? 'id-ID' : 'en-US', {
       style: 'currency',
@@ -447,11 +518,25 @@ export default function App() {
           Salary Calculator
         </button>
         <button 
+          onClick={() => setActiveView('variable')}
+          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'variable' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+        >
+          <TrendingUp size={16} />
+          Variable Pay
+        </button>
+        <button 
+          onClick={() => setActiveView('total')}
+          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'total' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+        >
+          <Globe size={16} />
+          Total Annual
+        </button>
+        <button 
           onClick={() => setActiveView('tax')}
           className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'tax' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
         >
           <ReceiptText size={16} />
-          Global Tax Calculator
+          Global Tax
         </button>
       </div>
 
@@ -569,6 +654,62 @@ export default function App() {
                         />
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 sm:p-8 rounded-[32px] shadow-sm border border-slate-100">
+                  <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <Plane size={20} className="text-blue-500" />
+                    Opsi Kompensasi
+                  </h2>
+                  <div className="space-y-4">
+                    <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition-colors group">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${includeTransport ? 'bg-indigo-600 text-white' : 'bg-white text-slate-400 border border-slate-100'}`}>
+                        <MapPin size={18} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-black text-slate-700">Transport Bandara</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">Rp 600.000 Fixed</p>
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        checked={includeTransport} 
+                        onChange={(e) => setIncludeTransport(e.target.checked)}
+                        className="w-5 h-5 rounded-md border-2 border-slate-200 text-indigo-600 focus:ring-indigo-500"
+                      />
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition-colors group">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${includeTransit ? 'bg-indigo-600 text-white' : 'bg-white text-slate-400 border border-slate-100'}`}>
+                        <DollarSign size={18} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-black text-slate-700">Transit Allowance</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">$80 Fixed</p>
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        checked={includeTransit} 
+                        onChange={(e) => setIncludeTransit(e.target.checked)}
+                        className="w-5 h-5 rounded-md border-2 border-slate-200 text-indigo-600 focus:ring-indigo-500"
+                      />
+                    </label>
+
+                    <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition-colors group">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${includeTravelDays ? 'bg-indigo-600 text-white' : 'bg-white text-slate-400 border border-slate-100'}`}>
+                        <Calendar size={18} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-black text-slate-700">Hari Perjalanan</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">$200 x 4 Days</p>
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        checked={includeTravelDays} 
+                        onChange={(e) => setIncludeTravelDays(e.target.checked)}
+                        className="w-5 h-5 rounded-md border-2 border-slate-200 text-indigo-600 focus:ring-indigo-500"
+                      />
+                    </label>
                   </div>
                 </div>
 
@@ -1154,6 +1295,238 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
+          ) : activeView === 'variable' ? (
+            <motion.div
+              key="variable-view"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-8"
+            >
+              <div className="lg:col-span-5 space-y-6">
+                <div className="bg-white p-6 sm:p-8 rounded-[32px] shadow-sm border border-slate-100">
+                  <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <Calculator size={20} className="text-indigo-500" />
+                    Parameter Variable Pay
+                  </h2>
+                  <div className="space-y-6">
+                    <CurrencyInput 
+                      label="(BS + TP) Home Nett"
+                      currency="IDR"
+                      value={basicSalaryHomeNett}
+                      onChange={setBasicSalaryHomeNett}
+                      placeholder="Gaji Nett Home Company"
+                    />
+                    <div className="space-y-4 pt-2">
+                      <div className="group">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between">
+                          People Review Score
+                          <span className="text-indigo-600 font-black">Score: {peopleReviewScore}</span>
+                        </label>
+                        <input 
+                          type="range" 
+                          min="1" 
+                          max="8" 
+                          step="1"
+                          value={peopleReviewScore} 
+                          onChange={(e) => setPeopleReviewScore(Number(e.target.value))}
+                          className="w-full h-2 bg-indigo-50 rounded-lg appearance-none cursor-pointer accent-indigo-600" 
+                        />
+                        <div className="flex justify-between mt-2 px-1">
+                          {[1,2,3,4,5,6,7,8].map(s => (
+                            <span key={s} className={`text-[9px] font-black ${peopleReviewScore === s ? 'text-indigo-600' : 'text-slate-300'}`}>{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="group">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between items-center">
+                          KPI Fungsi (%)
+                          <button 
+                            onClick={() => setKpiFungsi(110)}
+                            className="bg-indigo-50 text-indigo-600 text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter hover:bg-indigo-100 transition-colors"
+                          >
+                            Set Max (110%)
+                          </button>
+                        </label>
+                        <div className="flex items-center gap-4">
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="110" 
+                            value={kpiFungsi} 
+                            onChange={(e) => setKpiFungsi(Number(e.target.value))}
+                            className="w-full h-2 bg-indigo-50 rounded-lg appearance-none cursor-pointer accent-indigo-600" 
+                          />
+                          <div className="w-16">
+                            <input 
+                              type="number"
+                              value={kpiFungsi}
+                              onChange={(e) => setKpiFungsi(Math.min(110, Number(e.target.value)))}
+                              className="w-full bg-slate-50 border-none px-2 py-1 rounded-lg text-xs font-black text-indigo-600 text-center focus:ring-0"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-4 bg-slate-900 rounded-2xl flex flex-col gap-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pool Bonus (2025)</label>
+                        <div className="flex items-center gap-3">
+                          <input 
+                            type="number"
+                            step="0.01"
+                            value={poolBonus}
+                            onChange={(e) => setPoolBonus(Number(e.target.value))}
+                            className="bg-white/10 w-full px-4 py-2.5 rounded-xl border border-white/10 font-bold text-white outline-none focus:border-indigo-500"
+                          />
+                          <span className="text-xs font-bold text-slate-400 italic shrink-0">Default: 3.18</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-indigo-50 p-6 rounded-[32px] border border-indigo-100">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Info size={16} className="text-indigo-400" />
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">SMK Coefficient Logic</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <SMKTableItem score="1 - 3" coef="0%" active={peopleReviewScore >= 1 && peopleReviewScore <= 3} />
+                    <SMKTableItem score="4" coef="100%" active={peopleReviewScore === 4} />
+                    <SMKTableItem score="5" coef="110%" active={peopleReviewScore === 5} />
+                    <SMKTableItem score="6" coef="120%" active={peopleReviewScore === 6} />
+                    <SMKTableItem score="7 - 8" coef="132.5%" active={peopleReviewScore >= 7 && peopleReviewScore <= 8} />
+                  </div>
+                </div>
+              </div>
+              <div className="lg:col-span-7 flex flex-col gap-6">
+                <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-[32px] p-8 md:p-10 text-white shadow-2xl shadow-indigo-100 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-8 opacity-10">
+                    <TrendingUp size={100} />
+                  </div>
+                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.3em] mb-4 opacity-80 relative z-10">Total Variable Pay (Annual)</p>
+                  <div className="flex items-baseline gap-3 relative z-10">
+                    <span className="text-xl font-light opacity-80">IDR</span>
+                    <h3 className="text-5xl md:text-7xl font-black tracking-tighter truncate leading-tight">
+                      {Math.floor(variablePayCalc.total).toLocaleString('id-ID')}
+                    </h3>
+                  </div>
+                  <div className="mt-8 pt-8 border-t border-white/20 relative z-10 grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase opacity-60 mb-1">SMK Coefficient</p>
+                      <p className="text-2xl font-black">{(koefisienSMK * 100).toFixed(1)}%</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold uppercase opacity-60 mb-1">KPI Unit/Fungsi</p>
+                      <p className="text-2xl font-black">{kpiFungsi}%</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+                  <div className="p-6 md:p-8 bg-slate-50/50 border-b border-slate-100">
+                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">Rincian Variable Pay</h3>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    <VariablePayItem 
+                      label="Bantuan Fasilitas Istirahat Tahunan" 
+                      idr={variablePayCalc.istirahatTahunan} 
+                      desc="2 x (BS Home + TP Home) Nett" 
+                    />
+                    <VariablePayItem 
+                      label="THRK" 
+                      idr={variablePayCalc.thrk} 
+                      desc="2 x (BS Home + TP Home) Nett" 
+                    />
+                    <VariablePayItem 
+                      label="Insentif" 
+                      idr={variablePayCalc.insentif} 
+                      desc="((55% x KPI)+(45%xKoef SMK)) x 6 x Gaji Home" 
+                    />
+                    <VariablePayItem 
+                      label="Bonus" 
+                      idr={variablePayCalc.bonus} 
+                      desc="Pool Bonus x Gaji Home x Koef SMK" 
+                    />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ) : activeView === 'total' ? (
+            <motion.div
+              key="total-view"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="max-w-4xl mx-auto space-y-8"
+            >
+              <div className="text-center space-y-2 mb-8">
+                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">Total Annual Compensation</h2>
+                <p className="text-slate-500 font-medium">Rekapitulasi seluruh komponen penghasilan dalam setahun ({currency})</p>
+              </div>
+              <div className="bg-slate-900 rounded-[40px] p-8 md:p-12 text-white relative overflow-hidden shadow-2xl">
+                <div className="absolute -right-24 -top-24 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
+                <div className="absolute -left-12 -bottom-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl"></div>
+                <div className="relative z-10 flex flex-col items-center">
+                  <p className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-6">Grand Total Annual Pay (est.)</p>
+                  <div className="flex items-baseline gap-4 mb-4">
+                    <span className="text-2xl font-light text-slate-400">{currency}</span>
+                    <h3 className="text-5xl md:text-8xl font-black tracking-tighter">
+                      {currency === 'IDR' 
+                        ? Math.floor(totalAnnualPay.grandTotal).toLocaleString('id-ID')
+                        : totalAnnualPay.grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      }
+                    </h3>
+                  </div>
+                  <div className="w-full max-w-md h-1.5 bg-white/5 rounded-full mt-4 overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: '100%' }}
+                      transition={{ duration: 1.5, ease: "easeOut" }}
+                      className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400"
+                    ></motion.div>
+                  </div>
+                  <p className="mt-6 text-sm font-bold text-slate-500 italic">"Consolidated annual earnings report based on current profile inputs."</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <TotalAnnualCard 
+                  label="Monthly Salary (x12)" 
+                  value={totalAnnualPay.salaryAnnual} 
+                  currency={currency}
+                  icon={<Calculator className="text-indigo-500" />}
+                  color="indigo"
+                  percentage={(totalAnnualPay.salaryAnnual / totalAnnualPay.grandTotal * 100).toFixed(1)}
+                />
+                <TotalAnnualCard 
+                  label="Variable Pay" 
+                  value={totalAnnualPay.variablePayAnnual} 
+                  currency={currency}
+                  icon={<TrendingUp className="text-amber-500" />}
+                  color="amber"
+                  percentage={(totalAnnualPay.variablePayAnnual / totalAnnualPay.grandTotal * 100).toFixed(1)}
+                />
+                <TotalAnnualCard 
+                  label="Perjalanan Dinas" 
+                  value={totalAnnualPay.perdinAnnual} 
+                  currency={currency}
+                  icon={<Plane className="text-emerald-500" />}
+                  color="emerald"
+                  percentage={(totalAnnualPay.perdinAnnual / totalAnnualPay.grandTotal * 100).toFixed(1)}
+                />
+              </div>
+              <div className="bg-white p-4 rounded-3xl border border-slate-100 flex items-center justify-center gap-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Monthly Salary</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Variable Pay</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Perdin</span>
+                </div>
+              </div>
+            </motion.div>
           ) : (
             <motion.div
               key="tax-view"
@@ -1182,6 +1555,24 @@ export default function App() {
                     </div>
                     
                     <div className="space-y-4 flex-1">
+                      <div className="flex items-center gap-2 p-2 bg-indigo-50 rounded-xl mb-2 border border-indigo-100">
+                        <input 
+                          type="checkbox" 
+                          id="pullVariablePay"
+                          checked={pullVariablePay}
+                          onChange={(e) => setPullVariablePay(e.target.checked)}
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <label htmlFor="pullVariablePay" className="text-[10px] font-black text-slate-700 uppercase cursor-pointer flex-1">
+                          Pull from Variable Pay (Annual)
+                        </label>
+                        {pullVariablePay && (
+                          <span className="text-[10px] font-mono font-black text-indigo-600">
+                            {f(variablePayCalc.total)}
+                          </span>
+                        )}
+                      </div>
+
                       {domesticIncomes.map((inc, idx) => (
                         <div key={idx} className="space-y-2 relative group">
                           <input 
@@ -1220,17 +1611,17 @@ export default function App() {
                       ))}
                       
                       <div className="pt-4 mt-4 border-t border-slate-50">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Withholding & Deductions</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Withholding & Annual Deductions</p>
                         <div className="space-y-3">
                           <CurrencyInput 
-                            label="Pension (Year)"
+                            label="Iuran Pensiun / JHT (Annual)"
                             currency="IDR"
                             value={pensionContribution}
                             onChange={setPensionContribution}
                             inputClassName="py-2.5"
                           />
                           <CurrencyInput 
-                            label="Domestic Tax Paid"
+                            label="PPh 21 Already Paid (Annual)"
                             currency="IDR"
                             value={domesticTaxPaid}
                             onChange={setDomesticTaxPaid}
@@ -1259,23 +1650,65 @@ export default function App() {
                     </div>
                     
                     <div className="space-y-4 flex-1">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 p-2 bg-white/10 rounded-xl border border-white/10 mb-2">
+                          <input 
+                            type="checkbox" 
+                            id="pullSalaryForAlgerian"
+                            checked={pullSalaryForAlgerian}
+                            onChange={(e) => setPullSalaryForAlgerian(e.target.checked)}
+                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <label htmlFor="pullSalaryForAlgerian" className="text-[10px] font-black text-indigo-100 uppercase cursor-pointer flex-1">
+                            Pull from Salary (72.33% Base)
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-2 p-2 bg-white/10 rounded-xl border border-white/10">
+                          <input 
+                            type="checkbox" 
+                            id="autoCalcAlgerianTax"
+                            checked={autoCalcAlgerianTax}
+                            onChange={(e) => setAutoCalcAlgerianTax(e.target.checked)}
+                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <label htmlFor="autoCalcAlgerianTax" className="text-[10px] font-black text-indigo-100 uppercase cursor-pointer flex-1">
+                            Auto Calc Tax (27.67% Rate)
+                          </label>
+                        </div>
+                      </div>
+
                       <CurrencyInput 
                         label="Salarie Imposable (DZD)"
                         currency="DZD"
-                        value={foreignIncomeDZD}
+                        value={pullSalaryForAlgerian ? (totalAnnualPay.salaryAnnualIdr / dzdToIdrRate / 0.7233) : foreignIncomeDZD}
                         onChange={setForeignIncomeDZD}
                         className="text-white"
                         inputClassName="bg-white text-slate-900 border-transparent focus:border-white/30 py-2.5"
                         labelClassName="text-indigo-200"
+                        disabled={pullSalaryForAlgerian}
                       />
+                      <div className="flex justify-between items-center px-1">
+                        <span className="text-[9px] font-bold text-indigo-200 uppercase opacity-60">IDR Equivalent</span>
+                        <span className="text-[10px] font-black text-white">
+                          {f((pullSalaryForAlgerian ? (totalAnnualPay.salaryAnnualIdr / dzdToIdrRate / 0.7233) : foreignIncomeDZD) * dzdToIdrRate)}
+                        </span>
+                      </div>
+
                       <CurrencyInput 
                         label="Annual IRG Tax (DZD)"
                         currency="DZD"
-                        value={foreignTaxDZD}
+                        value={autoCalcAlgerianTax ? ((pullSalaryForAlgerian ? (totalAnnualPay.salaryAnnualIdr / dzdToIdrRate / 0.7233) : foreignIncomeDZD) * 0.2767) : foreignTaxDZD}
                         onChange={setForeignTaxDZD}
                         inputClassName="bg-white text-slate-900 border-transparent focus:border-white/30 py-2.5"
                         labelClassName="text-indigo-200"
+                        disabled={autoCalcAlgerianTax}
                       />
+                      <div className="flex justify-between items-center px-1">
+                        <span className="text-[9px] font-bold text-indigo-200 uppercase opacity-60">IDR Equivalent</span>
+                        <span className="text-[10px] font-black text-white">
+                          {f((autoCalcAlgerianTax ? ((pullSalaryForAlgerian ? (totalAnnualPay.salaryAnnualIdr / dzdToIdrRate / 0.7233) : foreignIncomeDZD) * 0.2767) : foreignTaxDZD) * dzdToIdrRate)}
+                        </span>
+                      </div>
                       
                       <div className="pt-4 mt-4 border-t border-white/10">
                         <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-2 flex justify-between">
@@ -1345,6 +1778,11 @@ export default function App() {
                   ptkpStatus={ptkpStatus}
                   pensionContribution={pensionContribution}
                   otherDeductions={otherDeductions}
+                  pullVariablePay={pullVariablePay}
+                  variablePayCalcTotal={variablePayCalc.total}
+                  pullSalaryForAlgerian={pullSalaryForAlgerian}
+                  salaryAnnualIdr={totalAnnualPay.salaryAnnualIdr}
+                  autoCalcAlgerianTax={autoCalcAlgerianTax}
                 />
               </div>
             </motion.div>
@@ -1364,6 +1802,61 @@ export default function App() {
           <span className="uppercase tracking-wider">Salary & Tax Calculator © 2026</span>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function SMKTableItem({ score, coef, active }: { score: string, coef: string, active: boolean }) {
+  return (
+    <div className={`p-3 rounded-xl border-2 transition-all ${active ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-100 opacity-60'}`}>
+      <p className={`text-[8px] font-black uppercase tracking-tighter ${active ? 'text-indigo-100' : 'text-slate-400'}`}>Score {score}</p>
+      <p className={`text-sm font-black ${active ? 'text-white' : 'text-slate-900'}`}>{coef}</p>
+    </div>
+  );
+}
+
+function VariablePayItem({ label, idr, desc }: { label: string, idr: number, desc: string }) {
+  return (
+    <div className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50 transition-colors">
+      <div>
+        <p className="text-sm font-black text-slate-800 leading-none mb-1">{label}</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{desc}</p>
+      </div>
+      <div className="text-right w-full sm:w-auto">
+        <p className="text-[8px] font-bold text-slate-400 uppercase">IDR</p>
+        <p className="text-lg font-black text-indigo-600">Rp {idr.toLocaleString('id-ID')}</p>
+      </div>
+    </div>
+  );
+}
+
+function TotalAnnualCard({ label, value, icon, color, percentage, currency }: { label: string, value: number, icon: ReactNode, color: string, percentage: string, currency: string }) {
+  const colorMap: Record<string, string> = {
+    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+    amber: 'bg-amber-50 text-amber-600 border-amber-100',
+    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col gap-4">
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${colorMap[color]}`}>
+        {icon}
+      </div>
+      <div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{label}</p>
+        <p className="text-sm sm:text-base lg:text-xl font-black text-slate-900 leading-tight">
+          {currency === 'IDR' ? 'Rp' : '$'} {value.toLocaleString(currency === 'IDR' ? 'id-ID' : 'en-US', { 
+            minimumFractionDigits: currency === 'IDR' ? 0 : 2,
+            maximumFractionDigits: currency === 'IDR' ? 0 : 2
+          })}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-full" style={{ width: `${percentage}%`, backgroundColor: color === 'indigo' ? '#4f46e5' : color === 'amber' ? '#d97706' : '#059669' }}></div>
+        </div>
+        <span className="text-[10px] font-black text-slate-400">{percentage}%</span>
+      </div>
     </div>
   );
 }
@@ -1513,7 +2006,12 @@ function TaxSummary({
   dzdToIdrRate, 
   ptkpStatus,
   pensionContribution,
-  otherDeductions
+  otherDeductions,
+  pullVariablePay,
+  variablePayCalcTotal,
+  pullSalaryForAlgerian,
+  salaryAnnualIdr,
+  autoCalcAlgerianTax
 }: any) {
   const brackets = [
     { label: '5%', min: 0, max: 60000000, rate: 0.05, color: '#10b981' },
@@ -1547,9 +2045,25 @@ function TaxSummary({
   };
 
   const results = useMemo(() => {
-    const annualDomestic = domesticIncomes.reduce((acc: number, curr: any) => acc + curr.amount, 0);
-    const annualForeignIncomeIDR = (foreignIncomeDZD * dzdToIdrRate);
-    const annualForeignTaxIDR = (foreignTaxDZD * dzdToIdrRate);
+    let annualDomestic = domesticIncomes.reduce((acc: number, curr: any) => acc + curr.amount, 0);
+    if (pullVariablePay) {
+      annualDomestic += variablePayCalcTotal;
+    }
+
+    let effectiveForeignIncomeDZD = foreignIncomeDZD;
+    if (pullSalaryForAlgerian) {
+      // DZD = IDR / rate
+      const salaryAnnualDZD = salaryAnnualIdr / dzdToIdrRate;
+      effectiveForeignIncomeDZD = salaryAnnualDZD / 0.7233;
+    }
+
+    let effectiveForeignTaxDZD = foreignTaxDZD;
+    if (autoCalcAlgerianTax) {
+      effectiveForeignTaxDZD = effectiveForeignIncomeDZD * 0.2767;
+    }
+
+    const annualForeignIncomeIDR = (effectiveForeignIncomeDZD * dzdToIdrRate);
+    const annualForeignTaxIDR = (effectiveForeignTaxDZD * dzdToIdrRate);
     
     const ptkpValue = ptkpMap[ptkpStatus] || 54000000;
     const annualGrossIncome = annualDomestic + annualForeignIncomeIDR;
@@ -1584,9 +2098,11 @@ function TaxSummary({
       ptkpValue,
       totalDeductions,
       bracketDetails,
-      annualForeignTaxIDR
+      annualForeignTaxIDR,
+      effectiveForeignIncomeDZD,
+      effectiveForeignTaxDZD
     };
-  }, [domesticIncomes, foreignIncomeDZD, foreignTaxDZD, dzdToIdrRate, ptkpStatus, domesticTaxPaid, pensionContribution, otherDeductions]);
+  }, [domesticIncomes, foreignIncomeDZD, foreignTaxDZD, dzdToIdrRate, ptkpStatus, domesticTaxPaid, pensionContribution, otherDeductions, pullVariablePay, variablePayCalcTotal, pullSalaryForAlgerian, salaryAnnualIdr, autoCalcAlgerianTax]);
 
   const activeBracketIndex = useMemo(() => {
     if (results.bracketDetails.length === 0) return -1;
@@ -1640,6 +2156,27 @@ function TaxSummary({
               <span className="text-slate-400">Pasal 24 (Foreign Credit)</span>
               <span className="text-emerald-400">-{f(results.finalKPLN)}</span>
             </div>
+
+            <div className="mt-4 p-4 border border-white/10 rounded-2xl bg-white/5 space-y-3">
+              <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest flex items-center gap-2">
+                <Info size={12} />
+                KPLN Pasal 24 Details
+              </p>
+              <div className="grid grid-cols-1 gap-2 text-[10px] text-slate-400">
+                <div className="flex justify-between">
+                  <span>Actual Foreign Tax Paid</span>
+                  <span className="font-bold text-slate-200">{f(results.annualForeignTaxIDR)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Max Credits Permitted (Porsi LN)</span>
+                  <span className="font-bold text-slate-200">{f(results.maxCredit)}</span>
+                </div>
+                <p className="italic text-[9px] mt-1 pt-1 border-t border-white/5 opacity-60">
+                  *The credited tax is the lower of actual tax paid and the maximum proportion of total tax due attributable to foreign income.
+                </p>
+              </div>
+            </div>
+
             <div className="flex justify-between border-b border-white/10 pb-2 font-medium">
               <span className="text-slate-400">Indo Tax Already Paid</span>
               <span className="text-emerald-400">-{f(domesticTaxPaid)}</span>

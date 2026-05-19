@@ -99,6 +99,7 @@ export default function App() {
   const [peopleReviewScore, setPeopleReviewScore] = useState<number>(4);
   const [kpiFungsi, setKpiFungsi] = useState<number>(100);
   const [poolBonus, setPoolBonus] = useState<number>(3.18);
+  const [panjarMonths, setPanjarMonths] = useState<number>(6);
 
   // Auto-calculate Perdin total duration from dates
   const perdinTotalDays = useMemo(() => {
@@ -168,8 +169,13 @@ export default function App() {
     const insentif = ((0.55 * (kpiFungsi / 100)) + (0.45 * koefisienSMK)) * 6 * basicSalaryHomeNett;
     const bonus = poolBonus * basicSalaryHomeNett * koefisienSMK;
     const total = istirahatTahunan + thrk + insentif + bonus;
-    return { istirahatTahunan, thrk, insentif, bonus, total };
-  }, [basicSalaryHomeNett, kpiFungsi, koefisienSMK, poolBonus]);
+    
+    // Final Insentif calculation
+    const insentifPanjar = basicSalaryHomeNett * panjarMonths;
+    const finalInsentif = Math.max(0, insentif - insentifPanjar);
+    
+    return { istirahatTahunan, thrk, insentif, bonus, total, insentifPanjar, finalInsentif };
+  }, [basicSalaryHomeNett, kpiFungsi, koefisienSMK, poolBonus, panjarMonths]);
 
   // On Duty Days is now computed: fieldDays + travelDays
   const onDutyDays = useMemo(() => fieldDays + travelDays, [fieldDays, travelDays]);
@@ -1427,6 +1433,146 @@ export default function App() {
                     />
                   </div>
                 </div>
+
+                {/* Sensitivity Analysis Chart */}
+                <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+                  <div className="p-6 md:p-8 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">Sensitivity Analysis</h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mt-1">Impact of KPI & People Review on Bonus + Insentif</p>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 justify-end">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                        <span className="text-[10px] font-bold text-slate-500">Score 7-8</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span className="text-[10px] font-bold text-slate-500">Score 6</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                        <span className="text-[10px] font-bold text-slate-500">Score 5</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                        <span className="text-[10px] font-bold text-slate-500">Score 4</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                        <span className="text-[10px] font-bold text-slate-500">Score 1-3</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-6 h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={Array.from({ length: 12 }, (_, i) => {
+                        const kpi = i * 10;
+                        const getVal = (smkCoef: number) => {
+                          const insentif = ((0.55 * kpi / 100) + (0.45 * smkCoef)) * 6 * basicSalaryHomeNett;
+                          const bonus = poolBonus * basicSalaryHomeNett * smkCoef;
+                          return (insentif + bonus) / 1000000; // In Millions
+                        };
+                        return {
+                          kpi: `${kpi}%`,
+                          score78: getVal(1.325),
+                          score6: getVal(1.2),
+                          score5: getVal(1.1),
+                          score4: getVal(1.0),
+                          score13: getVal(0)
+                        };
+                      })}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis 
+                          dataKey="kpi" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }}
+                        />
+                        <YAxis 
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }}
+                          label={{ value: 'IDR (Millions)', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: '#64748b', fontWeight: 'bold' } }}
+                        />
+                        <RechartsTooltip 
+                          contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                          itemStyle={{ fontSize: '11px', fontWeight: '900', textTransform: 'uppercase' }}
+                          labelStyle={{ fontWeight: '900', fontSize: '12px', color: '#1e293b', marginBottom: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px' }}
+                          formatter={(value: number) => [`Rp ${value.toFixed(1)}M`, "Total"]}
+                        />
+                        <Area type="monotone" dataKey="score78" stroke="#6366f1" fillOpacity={0.1} fill="#6366f1" strokeWidth={3} name="Score 7-8" />
+                        <Area type="monotone" dataKey="score6" stroke="#10b981" fillOpacity={0.05} fill="#10b981" strokeWidth={2} name="Score 6" />
+                        <Area type="monotone" dataKey="score5" stroke="#f59e0b" fillOpacity={0} fill="#f59e0b" strokeWidth={2} name="Score 5" />
+                        <Area type="monotone" dataKey="score4" stroke="#94a3b8" fillOpacity={0} fill="#94a3b8" strokeWidth={2} strokeDasharray="5 5" name="Score 4" />
+                        <Area type="monotone" dataKey="score13" stroke="#f87171" fillOpacity={0} fill="#f87171" strokeWidth={2} strokeDasharray="3 3" name="Score 1-3" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="px-8 pb-8 flex justify-center">
+                    <p className="text-[10px] font-bold text-slate-400 italic text-center max-w-md">
+                      "Grafik ini menunjukkan estimasi total Bonus & Insentif (dalam Juta Rp) berdasarkan variasi KPI Fungsi (0-110%) untuk 5 skenario People Review Score yang berbeda."
+                    </p>
+                  </div>
+                </div>
+
+                {/* Final Insentif Calculator */}
+                <div className="bg-slate-900 rounded-[32px] p-6 md:p-10 shadow-2xl relative overflow-hidden group">
+                  <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all duration-700"></div>
+                  <div className="relative z-10">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                      <div>
+                        <h3 className="text-xl font-black text-white italic tracking-tight">Final Insentif to be Paid</h3>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-1">Settlement Calculation</p>
+                      </div>
+                      <div className="bg-white/5 p-4 rounded-2xl border border-white/10 flex items-center gap-6">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block text-center">Panjar Months</label>
+                          <div className="flex items-center gap-3">
+                            <button 
+                              onClick={() => setPanjarMonths(prev => Math.max(1, prev - 1))}
+                              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                            >
+                              -
+                            </button>
+                            <span className="text-xl font-black text-white min-w-[20px] text-center">{panjarMonths}</span>
+                            <button 
+                              onClick={() => setPanjarMonths(prev => Math.min(6, prev + 1))}
+                              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                        <div className="h-10 w-px bg-white/10 hidden sm:block"></div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block">Home Salary Base</label>
+                          <p className="text-sm font-bold text-slate-300">Rp {basicSalaryHomeNett.toLocaleString('id-ID')}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight mb-2">Total Insentif (Annual)</p>
+                        <p className="text-lg font-black text-white">Rp {variablePayCalc.insentif.toLocaleString('id-ID')}</p>
+                      </div>
+                      <div className="bg-red-500/10 p-4 rounded-2xl border border-red-500/20">
+                        <p className="text-[10px] font-bold text-red-400 uppercase tracking-tight mb-2">Panjar Paid ({panjarMonths} mo)</p>
+                        <p className="text-lg font-black text-red-400">- Rp {variablePayCalc.insentifPanjar.toLocaleString('id-ID')}</p>
+                      </div>
+                      <div className="bg-emerald-500 p-6 rounded-2xl shadow-xl shadow-emerald-500/20 md:-mt-2 md:-mb-2 relative">
+                        <div className="absolute top-2 right-4 text-emerald-300 opacity-30">
+                          <Calculator size={40} />
+                        </div>
+                        <p className="text-[10px] font-black text-emerald-100 uppercase tracking-widest mb-2">To be Paid</p>
+                        <p className="text-2xl font-black text-white leading-none">
+                          Rp {variablePayCalc.finalInsentif.toLocaleString('id-ID')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </motion.div>
           ) : activeView === 'total' ? (
@@ -1790,7 +1936,7 @@ export default function App() {
             <div className={`p-2 rounded-2xl transition-all duration-300 ${activeView === 'salary' ? 'bg-indigo-50 shadow-inner' : 'bg-transparent group-hover:bg-slate-50'}`}>
               <Calculator size={20} strokeWidth={activeView === 'salary' ? 3 : 2} />
             </div>
-            <span className={`text-[10px] font-black uppercase tracking-tighter transition-all duration-300 ${activeView === 'salary' ? 'opacity-100 scale-100' : 'opacity-60 scale-95'}`}>Calc</span>
+            <span className={`text-[10px] font-black uppercase tracking-tighter transition-all duration-300 ${activeView === 'salary' ? 'opacity-100 scale-100' : 'opacity-60 scale-95'}`}>Salary</span>
           </button>
 
           <button 

@@ -28,16 +28,18 @@ async function startServer() {
 
   // Proxy for latest exchange rate
   app.get("/api/latest", async (req, res) => {
-    console.log('Fetching latest exchange rates...');
+    const requestId = Math.random().toString(36).substring(7);
+    console.log(`[${requestId}] Incoming request to /api/latest`);
     try {
       // Primary: Open er-api (Supports DZD and IDR)
+      console.log(`[${requestId}] Fetching from er-api...`);
       const resp = await fetch('https://open.er-api.com/v6/latest/USD');
       if (!resp.ok) throw new Error(`ER-API failed: ${resp.status}`);
       
       const data = await resp.json();
       
       if (data.result === 'success') {
-        console.log('Latest rates fetched successfully from open-er-api');
+        console.log(`[${requestId}] Latest rates fetched successfully from open-er-api`);
         return res.json({
           rates: {
             IDR: data.rates.IDR,
@@ -49,18 +51,28 @@ async function startServer() {
       }
       throw new Error(`ER-API result was not success: ${data.result}`);
     } catch (error) {
-      console.error('Primary latest rate fetch failed, trying fallback...', error);
+      console.error(`[${requestId}] Primary latest rate fetch failed, trying fallback...`, error);
       try {
+        console.log(`[${requestId}] Fetching from frankfurter fallback...`);
         const response = await fetch('https://api.frankfurter.app/latest?from=USD&to=IDR');
         if (response.ok) {
           const data = await response.json();
-          console.log('Latest rates fetched from Frankfurter fallback');
+          console.log(`[${requestId}] Latest rates fetched from Frankfurter fallback`);
           return res.json({ ...data, provider: 'frankfurter' });
         }
         throw new Error(`Frankfurter fallback failed: ${response.status}`);
       } catch (fallbackError) {
-        console.error('All latest rate fetch attempts failed:', fallbackError);
-        res.status(500).json({ error: 'Failed to fetch latest data' });
+        console.error(`[${requestId}] All latest rate fetch attempts failed, using hardcoded fallback:`, fallbackError);
+        // Absolute final fallback to prevent app crash
+        return res.json({
+          rates: {
+            IDR: 16200,
+            DZD: 135,
+            EUR: 0.92
+          },
+          provider: 'hardcoded-fallback',
+          error: 'External APIs unreachable'
+        });
       }
     }
   });

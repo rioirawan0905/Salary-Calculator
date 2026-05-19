@@ -191,6 +191,14 @@ export default function App() {
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
       }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Expected JSON but got:', text.substring(0, 100));
+        throw new Error('Server returned non-JSON response');
+      }
+
       const data = await response.json();
       
       if (data && data.rates) {
@@ -250,6 +258,15 @@ export default function App() {
 
       const url = `/api/history?start=${formatDate(monthAgo)}&end=${formatDate(today)}&from=${from}&to=${to}`;
       const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned non-JSON for history');
+      }
+
       const data = await response.json();
       
       if (data && data.rates) {
@@ -448,25 +465,27 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Header Navigation */}
-      <nav className="h-16 md:h-20 px-4 md:px-10 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 z-50">
+      <nav className="h-16 md:h-20 px-3 md:px-10 flex items-center justify-between bg-white border-b border-slate-100 sticky top-0 z-50">
         <div className="flex items-center gap-2 md:gap-3">
-          <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-600 rounded-lg md:rounded-xl flex items-center justify-center shrink-0">
-            <span className="text-white font-black text-lg md:text-xl">S</span>
+          <div className="w-7 h-7 md:w-10 md:h-10 bg-indigo-600 rounded-lg md:rounded-xl flex items-center justify-center shrink-0">
+            <span className="text-white font-black text-sm md:text-xl">S</span>
           </div>
-          <h1 className="text-base sm:text-xl md:text-2xl font-bold text-slate-800 tracking-tight whitespace-nowrap">Salary & Tax <span className="text-indigo-600">Calculator</span></h1>
+          <h1 className="text-sm sm:text-lg md:text-2xl font-black text-slate-800 tracking-tighter whitespace-nowrap">
+            Salary <span className="text-indigo-600">Calc</span>
+          </h1>
         </div>
         
-        <div className="flex items-center gap-2 md:gap-4">
-          <div className="bg-slate-100 p-1 rounded-lg md:rounded-xl flex items-center">
+        <div className="flex items-center gap-1.5 md:gap-4">
+          <div className="bg-slate-100 p-0.5 md:p-1 rounded-lg md:rounded-xl flex items-center">
             <button 
               onClick={() => changeCurrency('USD')}
-              className={`px-2 sm:px-4 py-1 sm:py-1.5 rounded-md md:rounded-lg text-[10px] sm:text-xs font-bold transition-all ${currency === 'USD' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`px-3 py-1.5 rounded-md md:rounded-lg text-[10px] font-black transition-all ${currency === 'USD' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
             >
               USD
             </button>
             <button 
               onClick={() => changeCurrency('IDR')}
-              className={`px-2 sm:px-4 py-1 sm:py-1.5 rounded-md md:rounded-lg text-[10px] sm:text-xs font-bold transition-all ${currency === 'IDR' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`px-3 py-1.5 rounded-md md:rounded-lg text-[10px] font-black transition-all ${currency === 'IDR' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
             >
               IDR
             </button>
@@ -475,10 +494,10 @@ export default function App() {
           <button 
             onClick={fetchExchangeRate}
             disabled={isFetchingRate}
-            className="p-1.5 md:p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all shrink-0"
+            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all shrink-0"
             title={`Exchange Rate: 1 USD = ${exchangeRate.toLocaleString()} IDR`}
           >
-            <RefreshCcw size={16} className={isFetchingRate ? 'animate-spin' : ''} />
+            <RefreshCcw size={14} className={isFetchingRate ? 'animate-spin' : ''} />
           </button>
 
           <div className="hidden lg:flex items-center gap-4 border-l border-slate-100 pl-4 group/rate">
@@ -501,47 +520,8 @@ export default function App() {
         </div>
       </nav>
 
-      {/* Main Tab Switcher */}
-      <div className="bg-white border-b border-slate-100 px-4 md:px-10 flex justify-center gap-4 md:gap-8 overflow-x-auto no-scrollbar">
-        <button 
-          onClick={() => setActiveView('perdin')}
-          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'perdin' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-        >
-          <Plane size={16} />
-          Perjalanan Dinas
-        </button>
-        <button 
-          onClick={() => setActiveView('salary')}
-          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'salary' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-        >
-          <Calculator size={16} />
-          Salary Calculator
-        </button>
-        <button 
-          onClick={() => setActiveView('variable')}
-          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'variable' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-        >
-          <TrendingUp size={16} />
-          Variable Pay
-        </button>
-        <button 
-          onClick={() => setActiveView('total')}
-          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'total' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-        >
-          <Globe size={16} />
-          Total Annual
-        </button>
-        <button 
-          onClick={() => setActiveView('tax')}
-          className={`h-12 text-xs sm:text-sm font-bold border-b-2 transition-all whitespace-nowrap shrink-0 flex items-center gap-2 ${activeView === 'tax' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-        >
-          <ReceiptText size={16} />
-          Global Tax
-        </button>
-      </div>
-
       {/* Main Content */}
-      <main className="flex-1 p-4 md:p-10 max-w-7xl mx-auto w-full mb-12">
+      <main className="flex-1 p-3 sm:p-6 md:p-10 max-w-7xl mx-auto w-full mb-24 pb-8">
         <AnimatePresence mode="wait">
           {activeView === 'perdin' ? (
             <motion.div
@@ -553,8 +533,8 @@ export default function App() {
             >
               {/* Perdin Inputs */}
               <div className="lg:col-span-5 space-y-6">
-                <div className="bg-white p-6 sm:p-8 rounded-[32px] shadow-sm border border-slate-100">
-                  <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <div className="bg-white p-4 sm:p-8 rounded-[32px] shadow-sm border border-slate-100">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                     <Calendar size={20} className="text-indigo-500" />
                     Timeline & Durasi
                   </h2>
@@ -607,8 +587,8 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-white p-6 sm:p-8 rounded-[32px] shadow-sm border border-slate-100">
-                  <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <div className="bg-white p-4 sm:p-8 rounded-[32px] shadow-sm border border-slate-100">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                     <MapPin size={20} className="text-emerald-500" />
                     Detail Lokasi (Days)
                   </h2>
@@ -657,8 +637,8 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-white p-6 sm:p-8 rounded-[32px] shadow-sm border border-slate-100">
-                  <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <div className="bg-white p-4 sm:p-8 rounded-[32px] shadow-sm border border-slate-100">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                     <Plane size={20} className="text-blue-500" />
                     Opsi Kompensasi
                   </h2>
@@ -792,11 +772,11 @@ export default function App() {
                 <motion.div 
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="bg-white p-5 sm:p-8 rounded-[24px] sm:rounded-[32px] shadow-sm border border-slate-100 h-fit"
+                  className="bg-white p-4 sm:p-8 rounded-[24px] sm:rounded-[32px] shadow-sm border border-slate-100 h-fit"
                 >
-                  <h2 className="text-lg sm:text-xl font-bold text-slate-800 mb-6 sm:mb-8 flex items-center gap-2">
+                  <h2 className="text-base sm:text-xl font-bold text-slate-800 mb-6 sm:mb-8 flex items-center gap-2">
                     <span className="w-1.5 sm:w-2 h-5 sm:h-6 bg-amber-400 rounded-full"></span>
-                    Input Parameters
+                    Parameters
                   </h2>
                   
                   <div className="space-y-5 sm:space-y-6">
@@ -1464,18 +1444,18 @@ export default function App() {
               <div className="bg-slate-900 rounded-[40px] p-8 md:p-12 text-white relative overflow-hidden shadow-2xl">
                 <div className="absolute -right-24 -top-24 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
                 <div className="absolute -left-12 -bottom-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl"></div>
-                <div className="relative z-10 flex flex-col items-center">
-                  <p className="text-xs font-black uppercase tracking-[0.4em] text-indigo-400 mb-6">Grand Total Annual Pay (est.)</p>
-                  <div className="flex items-baseline gap-4 mb-4">
-                    <span className="text-2xl font-light text-slate-400">{currency}</span>
-                    <h3 className="text-5xl md:text-8xl font-black tracking-tighter">
+                <div className="relative z-10 flex flex-col items-center text-center">
+                  <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-4 md:mb-6">Grand Total Annual Pay (est.)</p>
+                  <div className="flex flex-col sm:flex-row items-center sm:items-baseline gap-1 sm:gap-4 mb-4">
+                    <span className="text-xl md:text-2xl font-light text-slate-400">{currency}</span>
+                    <h3 className="text-4xl sm:text-6xl md:text-8xl font-black tracking-tighter">
                       {currency === 'IDR' 
                         ? Math.floor(totalAnnualPay.grandTotal).toLocaleString('id-ID')
                         : totalAnnualPay.grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                       }
                     </h3>
                   </div>
-                  <div className="w-full max-w-md h-1.5 bg-white/5 rounded-full mt-4 overflow-hidden">
+                  <div className="w-full max-w-xs md:max-w-md h-1 bg-white/5 rounded-full mt-2 md:mt-4 overflow-hidden">
                     <motion.div 
                       initial={{ width: 0 }}
                       animate={{ width: '100%' }}
@@ -1483,7 +1463,7 @@ export default function App() {
                       className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400"
                     ></motion.div>
                   </div>
-                  <p className="mt-6 text-sm font-bold text-slate-500 italic">"Consolidated annual earnings report based on current profile inputs."</p>
+                  <p className="mt-6 text-[10px] sm:text-xs font-bold text-slate-500 italic px-4">"Consolidated annual earnings report based on current profile inputs."</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1790,6 +1770,61 @@ export default function App() {
         </AnimatePresence>
       </main>
 
+      {/* Fixed Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-200 px-2 sm:px-6 py-2 z-[100] shadow-[0_-8px_40px_rgba(0,0,0,0.08)]">
+        <div className="max-w-xl mx-auto flex justify-between items-center">
+          <button 
+            onClick={() => setActiveView('perdin')}
+            className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-1 transition-all group ${activeView === 'perdin' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <div className={`p-2 rounded-2xl transition-all duration-300 ${activeView === 'perdin' ? 'bg-indigo-50 shadow-inner' : 'bg-transparent group-hover:bg-slate-50'}`}>
+              <Plane size={20} strokeWidth={activeView === 'perdin' ? 3 : 2} />
+            </div>
+            <span className={`text-[10px] font-black uppercase tracking-tighter transition-all duration-300 ${activeView === 'perdin' ? 'opacity-100 scale-100' : 'opacity-60 scale-95'}`}>Travel</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveView('salary')}
+            className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-1 transition-all group ${activeView === 'salary' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <div className={`p-2 rounded-2xl transition-all duration-300 ${activeView === 'salary' ? 'bg-indigo-50 shadow-inner' : 'bg-transparent group-hover:bg-slate-50'}`}>
+              <Calculator size={20} strokeWidth={activeView === 'salary' ? 3 : 2} />
+            </div>
+            <span className={`text-[10px] font-black uppercase tracking-tighter transition-all duration-300 ${activeView === 'salary' ? 'opacity-100 scale-100' : 'opacity-60 scale-95'}`}>Calc</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveView('variable')}
+            className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-1 transition-all group ${activeView === 'variable' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <div className={`p-2 rounded-2xl transition-all duration-300 ${activeView === 'variable' ? 'bg-indigo-50 shadow-inner' : 'bg-transparent group-hover:bg-slate-50'}`}>
+              <TrendingUp size={20} strokeWidth={activeView === 'variable' ? 3 : 2} />
+            </div>
+            <span className={`text-[10px] font-black uppercase tracking-tighter transition-all duration-300 ${activeView === 'variable' ? 'opacity-100 scale-100' : 'opacity-60 scale-95'}`}>Variable</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveView('total')}
+            className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-1 transition-all group ${activeView === 'total' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <div className={`p-2 rounded-2xl transition-all duration-300 ${activeView === 'total' ? 'bg-indigo-50 shadow-inner' : 'bg-transparent group-hover:bg-slate-50'}`}>
+              <Globe size={20} strokeWidth={activeView === 'total' ? 3 : 2} />
+            </div>
+            <span className={`text-[10px] font-black uppercase tracking-tighter transition-all duration-300 ${activeView === 'total' ? 'opacity-100 scale-100' : 'opacity-60 scale-95'}`}>Total</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveView('tax')}
+            className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-1 transition-all group ${activeView === 'tax' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <div className={`p-2 rounded-2xl transition-all duration-300 ${activeView === 'tax' ? 'bg-indigo-50 shadow-inner' : 'bg-transparent group-hover:bg-slate-50'}`}>
+              <ReceiptText size={20} strokeWidth={activeView === 'tax' ? 3 : 2} />
+            </div>
+            <span className={`text-[10px] font-black uppercase tracking-tighter transition-all duration-300 ${activeView === 'tax' ? 'opacity-100 scale-100' : 'opacity-60 scale-95'}`}>Tax</span>
+          </button>
+        </div>
+      </nav>
+
       {/* Footer / Status Bar */}
       <footer className="px-4 md:px-10 py-6 bg-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] font-bold text-slate-400 mt-auto border-t border-slate-200">
         <div className="flex flex-wrap justify-center sm:justify-start gap-4 sm:gap-6 uppercase tracking-wider">
@@ -1863,24 +1898,24 @@ function TotalAnnualCard({ label, value, icon, color, percentage, currency }: { 
 
 function ComparisonRow({ label, newVal, oldVal, diff, formatValue, subLabel, isTotal }: any) {
   return (
-    <div className={`p-4 rounded-2xl border transition-all ${isTotal ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg' : 'bg-white border-slate-100 hover:border-indigo-100 shadow-sm'}`}>
+    <div className={`p-3 sm:p-4 rounded-2xl border transition-all ${isTotal ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg' : 'bg-white border-slate-100 hover:border-indigo-100 shadow-sm'}`}>
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-        <div>
-          <h4 className={`text-xs font-black uppercase tracking-tight ${isTotal ? 'text-indigo-100' : 'text-slate-800'}`}>{label}</h4>
-          {subLabel && <p className={`text-[10px] font-medium opacity-60`}>{subLabel}</p>}
+        <div className="mb-1 sm:mb-0">
+          <h4 className={`text-[10px] sm:text-xs font-black uppercase tracking-tight ${isTotal ? 'text-indigo-100' : 'text-slate-800'}`}>{label}</h4>
+          {subLabel && <p className={`text-[9px] sm:text-[10px] font-medium opacity-60`}>{subLabel}</p>}
         </div>
-        <div className="flex items-center gap-4 sm:gap-8">
+        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-8">
           <div className="text-right">
             <p className={`text-[8px] font-bold uppercase opacity-50`}>Old</p>
-            <p className={`text-xs font-bold font-mono ${isTotal ? 'text-white' : 'text-slate-400'}`}>{formatValue(oldVal)}</p>
+            <p className={`text-[10px] sm:text-xs font-bold font-mono ${isTotal ? 'text-white' : 'text-slate-400'}`}>{formatValue(oldVal)}</p>
           </div>
           <div className="text-right">
             <p className={`text-[8px] font-bold uppercase opacity-50`}>New</p>
-            <p className={`text-sm font-black font-mono`}>{formatValue(newVal)}</p>
+            <p className={`text-xs sm:text-sm font-black font-mono`}>{formatValue(newVal)}</p>
           </div>
-          <div className={`min-w-[80px] text-right px-3 py-1 rounded-lg ${diff > 0 ? (isTotal ? 'bg-emerald-400/20 text-emerald-300' : 'bg-emerald-50 text-emerald-600') : diff < 0 ? (isTotal ? 'bg-red-400/20 text-red-300' : 'bg-red-50 text-red-600') : (isTotal ? 'text-white/40' : 'text-slate-300')}`}>
+          <div className={`min-w-[70px] sm:min-w-[80px] text-right px-2 sm:px-3 py-1 rounded-lg ${diff > 0 ? (isTotal ? 'bg-emerald-400/20 text-emerald-300' : 'bg-emerald-50 text-emerald-600') : diff < 0 ? (isTotal ? 'bg-red-400/20 text-red-300' : 'bg-red-50 text-red-600') : (isTotal ? 'text-white/40' : 'text-slate-300')}`}>
             <p className={`text-[8px] font-bold uppercase opacity-50 mb-0.5`}>Diff</p>
-            <p className="text-xs font-black font-mono">
+            <p className="text-[10px] sm:text-xs font-black font-mono">
               {diff > 0 ? '+' : ''}{formatValue(diff)}
             </p>
           </div>
@@ -2112,16 +2147,16 @@ function TaxSummary({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="bg-slate-900 text-white p-6 sm:p-8 rounded-[32px] sm:rounded-[40px] shadow-xl relative overflow-hidden h-fit">
+      <div className="bg-slate-900 text-white p-5 sm:p-8 rounded-[32px] sm:rounded-[40px] shadow-xl relative overflow-hidden h-fit">
         <div className="absolute top-0 right-0 p-8 opacity-10">
           <ReceiptText size={100} />
         </div>
         
-        <div className="relative z-10 space-y-6">
+        <div className="relative z-10 space-y-5 sm:space-y-6">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-indigo-400 font-black uppercase tracking-[0.2em] text-[10px] mb-2">{results.taxStatus}</p>
-              <h4 className={`text-3xl sm:text-4xl font-black tracking-tight ${results.annualTaxPayable === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <h4 className={`text-2xl sm:text-4xl font-black tracking-tight ${results.annualTaxPayable === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
                 {f(Math.abs(results.annualTaxPayable))}
               </h4>
               <div className="flex items-center gap-2 mt-2">

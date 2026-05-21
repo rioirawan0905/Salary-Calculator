@@ -63,6 +63,11 @@ export default function App() {
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
   const [rateProvider, setRateProvider] = useState<string>('Default');
 
+  // Toggle active allowances states
+  const [includeHardship, setIncludeHardship] = useState<boolean>(true);
+  const [includeFieldAllowance, setIncludeFieldAllowance] = useState<boolean>(true);
+  const [includeTravelAllowance, setIncludeTravelAllowance] = useState<boolean>(true);
+
   // Tax Calculator State
   const [dzdToIdrRate, setDzdToIdrRate] = useState<number>(135); 
   const [ptkpStatus, setPtkpStatus] = useState<string>('TK/0');
@@ -201,7 +206,7 @@ export default function App() {
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text();
-        console.error('Expected JSON but got:', text.substring(0, 100));
+        console.warn('Backend proxy (/api/latest) did not return JSON. Trying fallback client-side fetches...', text.substring(0, 100));
         throw new Error('Server returned non-JSON response');
       }
 
@@ -222,8 +227,46 @@ export default function App() {
         setLastUpdated('Data error');
       }
     } catch (error) {
-      console.error('Failed to fetch exchange rate:', error);
-      setLastUpdated('Sync failed');
+      console.warn('Failed to fetch exchange rate from server proxy, attempting client-side live API fetches directly...', error);
+      try {
+        // Fallback: Fetch directly from open.er-api.com in the browser
+        const resp = await fetch('https://open.er-api.com/v6/latest/USD');
+        if (!resp.ok) throw new Error(`Client-side ER-API failed: ${resp.status}`);
+        const data = await resp.json();
+        if (data && data.rates && data.rates.IDR) {
+          setExchangeRate(data.rates.IDR);
+          if (data.rates.DZD) {
+            const dzdInIdr = (1 / data.rates.DZD) * data.rates.IDR;
+            setDzdToIdrRate(dzdInIdr);
+          }
+          setRateProvider('ER-API (Direct)');
+          setLastUpdated(new Date().toLocaleTimeString());
+          return;
+        }
+        throw new Error('Valid rates structure not found in ER-API response');
+      } catch (clientErr) {
+        console.warn('Direct ER-API fetch failed, trying direct Frankfurter API...', clientErr);
+        try {
+          const resp = await fetch('https://api.frankfurter.app/latest?from=USD&to=IDR');
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.rates && data.rates.IDR) {
+              setExchangeRate(data.rates.IDR);
+              setRateProvider('Frankfurter (Direct)');
+              setLastUpdated(new Date().toLocaleTimeString());
+              return;
+            }
+          }
+          throw new Error(`Frankfurter direct fetch failed: ${resp.status}`);
+        } catch (frankErr) {
+          console.error('All live fetch attempts failed. Using safe default rates:', frankErr);
+          // Set standard fallback exchange rates so user can still calculate without breaking
+          setExchangeRate(16200);
+          setDzdToIdrRate(120);
+          setRateProvider('Static Fallback');
+          setLastUpdated('Sync failed');
+        }
+      }
     } finally {
       setIsFetchingRate(false);
     }
@@ -313,9 +356,9 @@ export default function App() {
     const dDays = fDays + tDays;
     const baseAmount = bs;
     const foreignServiceAllowance = 0.15 * bs * (dDays / 30);
-    const hardshipAllowance = 0.55 * bs * (dDays / 30);
-    const fieldAllowance = 0.04 * bs * fDays;
-    const travelAllowance = 0.04 * bs * tDays;
+    const hardshipAllowance = includeHardship ? 0.55 * bs * (dDays / 30) : 0;
+    const fieldAllowance = includeFieldAllowance ? 0.04 * bs * fDays : 0;
+    const travelAllowance = includeTravelAllowance ? 0.04 * bs * tDays : 0;
     
     const total = baseAmount + foreignServiceAllowance + hardshipAllowance + fieldAllowance + travelAllowance;
     
@@ -331,7 +374,7 @@ export default function App() {
 
   const calculations = useMemo(() => {
     return calculateForDays(baseSalary, fieldDays, travelDays);
-  }, [baseSalary, fieldDays, travelDays, currency, exchangeRate]);
+  }, [baseSalary, fieldDays, travelDays, currency, exchangeRate, includeHardship, includeFieldAllowance, includeTravelAllowance]);
 
   const displayCalculations = useMemo(() => {
     return {
@@ -395,7 +438,7 @@ export default function App() {
       });
     }
     return data;
-  }, [baseSalary, travelDays]);
+  }, [baseSalary, travelDays, includeHardship, includeFieldAllowance, includeTravelAllowance]);
 
   const exportToExcel = () => {
     const worksheet = XLSX.utils.json_to_sheet(tableData.map(d => ({
@@ -809,6 +852,58 @@ export default function App() {
                           <p className="text-xl font-black text-slate-700">{onDutyDays} Days</p>
                         </div>
                         <Calendar className="text-indigo-200" size={32} />
+                      </div>
+
+                      <div className="space-y-3 pt-4 border-t border-slate-100">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Allowances</h4>
+                        
+                        <label className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 border border-slate-100 transition-all select-none col-span-1">
+                          <div className="flex items-center gap-3">
+                            <span className={`w-2.5 h-2.5 rounded-full ${includeHardship ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]' : 'bg-slate-300'}`}></span>
+                            <div>
+                              <p className="text-xs font-black text-slate-700">Hardship Allowance</p>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase">55% of Base Salary Ratio</p>
+                            </div>
+                          </div>
+                          <input 
+                            type="checkbox" 
+                            checked={includeHardship} 
+                            onChange={(e) => setIncludeHardship(e.target.checked)}
+                            className="w-5 h-5 rounded-md border-2 border-slate-200 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </label>
+
+                        <label className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 border border-slate-100 transition-all select-none col-span-1">
+                          <div className="flex items-center gap-3">
+                            <span className={`w-2.5 h-2.5 rounded-full ${includeFieldAllowance ? 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-slate-300'}`}></span>
+                            <div>
+                              <p className="text-xs font-black text-slate-700">Field Allowance</p>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase">4% of Base Ratio / Field Day</p>
+                            </div>
+                          </div>
+                          <input 
+                            type="checkbox" 
+                            checked={includeFieldAllowance} 
+                            onChange={(e) => setIncludeFieldAllowance(e.target.checked)}
+                            className="w-5 h-5 rounded-md border-2 border-slate-200 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </label>
+
+                        <label className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 border border-slate-100 transition-all select-none col-span-1">
+                          <div className="flex items-center gap-3">
+                            <span className={`w-2.5 h-2.5 rounded-full ${includeTravelAllowance ? 'bg-fuchsia-400 shadow-[0_0_8px_rgba(217,70,239,0.4)]' : 'bg-slate-300'}`}></span>
+                            <div>
+                              <p className="text-xs font-black text-slate-700">Travel Allowance</p>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase">4% of Base Ratio / Travel Day</p>
+                            </div>
+                          </div>
+                          <input 
+                            type="checkbox" 
+                            checked={includeTravelAllowance} 
+                            onChange={(e) => setIncludeTravelAllowance(e.target.checked)}
+                            className="w-5 h-5 rounded-md border-2 border-slate-200 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </label>
                       </div>
                     </div>
                   </div>

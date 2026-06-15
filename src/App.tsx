@@ -1311,17 +1311,18 @@ export default function App() {
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between items-center">
                           KPI Fungsi (%)
                           <button 
-                            onClick={() => setKpiFungsi(110)}
+                            onClick={() => setKpiFungsi(120)}
                             className="bg-indigo-50 text-indigo-600 text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter hover:bg-indigo-100 transition-colors"
                           >
-                            Set Max (110%)
+                            Set Max (120%)
                           </button>
                         </label>
                         <div className="flex items-center gap-4">
                           <input 
                             type="range" 
                             min="0" 
-                            max="110" 
+                            max="120" 
+                            step="0.01"
                             value={kpiFungsi} 
                             onChange={(e) => setKpiFungsi(Number(e.target.value))}
                             className="w-full h-2 bg-indigo-50 rounded-lg appearance-none cursor-pointer accent-indigo-600" 
@@ -1329,8 +1330,9 @@ export default function App() {
                           <div className="w-16">
                             <input 
                               type="number"
+                              step="0.01"
                               value={kpiFungsi}
-                              onChange={(e) => setKpiFungsi(Math.min(110, Number(e.target.value)))}
+                              onChange={(e) => setKpiFungsi(Math.min(120, Number(e.target.value)))}
                               className="w-full bg-slate-50 border-none px-2 py-1 rounded-lg text-xs font-black text-indigo-600 text-center focus:ring-0"
                             />
                           </div>
@@ -1385,7 +1387,7 @@ export default function App() {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-bold uppercase opacity-60 mb-1">KPI Unit/Fungsi</p>
-                      <p className="text-2xl font-black">{kpiFungsi}%</p>
+                      <p className="text-2xl font-black">{Number(kpiFungsi).toFixed(2)}%</p>
                     </div>
                   </div>
                 </div>
@@ -1449,7 +1451,7 @@ export default function App() {
                   </div>
                   <div className="p-6 h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={Array.from({ length: 12 }, (_, i) => {
+                      <AreaChart data={Array.from({ length: 13 }, (_, i) => {
                         const kpi = i * 10;
                         const getVal = (smkCoef: number) => {
                           const insentif = ((0.55 * kpi / 100) + (0.45 * smkCoef)) * 6 * basicSalaryHomeNett;
@@ -1494,7 +1496,7 @@ export default function App() {
                   </div>
                   <div className="px-8 pb-8 flex justify-center">
                     <p className="text-[10px] font-bold text-slate-400 italic text-center max-w-md">
-                      "Grafik ini menunjukkan estimasi total Bonus & Insentif (dalam Juta Rp) berdasarkan variasi KPI Fungsi (0-110%) untuk 5 skenario People Review Score yang berbeda."
+                      "Grafik ini menunjukkan estimasi total Bonus & Insentif (dalam Juta Rp) berdasarkan variasi KPI Fungsi (0-120%) untuk 5 skenario People Review Score yang berbeda."
                     </p>
                   </div>
                 </div>

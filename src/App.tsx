@@ -161,9 +161,9 @@ export default function App() {
   // Variable Pay Logic
   const koefisienSMK = useMemo(() => {
     if (peopleReviewScore >= 1 && peopleReviewScore <= 3) return 0;
-    if (peopleReviewScore === 4) return 1;
-    if (peopleReviewScore === 5) return 1.1;
-    if (peopleReviewScore === 6) return 1.2;
+    if (peopleReviewScore === 4) return 0.95;
+    if (peopleReviewScore === 5) return 1.075;
+    if (peopleReviewScore === 6) return 1.225;
     if (peopleReviewScore >= 7 && peopleReviewScore <= 8) return 1.325;
     return 0;
   }, [peopleReviewScore]);
@@ -1361,9 +1361,9 @@ export default function App() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <SMKTableItem score="1 - 3" coef="0%" active={peopleReviewScore >= 1 && peopleReviewScore <= 3} />
-                    <SMKTableItem score="4" coef="100%" active={peopleReviewScore === 4} />
-                    <SMKTableItem score="5" coef="110%" active={peopleReviewScore === 5} />
-                    <SMKTableItem score="6" coef="120%" active={peopleReviewScore === 6} />
+                    <SMKTableItem score="4" coef="95%" active={peopleReviewScore === 4} />
+                    <SMKTableItem score="5" coef="107.5%" active={peopleReviewScore === 5} />
+                    <SMKTableItem score="6" coef="122.5%" active={peopleReviewScore === 6} />
                     <SMKTableItem score="7 - 8" coef="132.5%" active={peopleReviewScore >= 7 && peopleReviewScore <= 8} />
                   </div>
                 </div>
@@ -1461,9 +1461,9 @@ export default function App() {
                         return {
                           kpi: `${kpi}%`,
                           score78: getVal(1.325),
-                          score6: getVal(1.2),
-                          score5: getVal(1.1),
-                          score4: getVal(1.0),
+                          score6: getVal(1.225),
+                          score5: getVal(1.075),
+                          score4: getVal(0.95),
                           score13: getVal(0)
                         };
                       })}>
